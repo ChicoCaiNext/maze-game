@@ -1,0 +1,3767 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no,viewport-fit=cover">
+<title>Maze Adventure</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{width:100%;height:100%;overflow:hidden;touch-action:manipulation;
+  background:#1a1a2e;font-family:-apple-system,'Segoe UI',sans-serif;color:#fff}
+
+#game-root{position:fixed;top:0;left:0;width:100vw;height:100vh;overflow:visible}
+@media (orientation: portrait) {
+  #game-root{
+    width:100vh;height:100vw;
+    transform:rotate(90deg);
+    transform-origin:top left;
+    top:0;left:100vw;
+    overflow:visible;
+  }
+}
+canvas#game-canvas{display:block;position:absolute;inset:0;width:100%!important;height:100%!important;touch-action:none}
+
+.screen{position:absolute;inset:0;display:flex;flex-direction:column;
+  align-items:center;justify-content:center;z-index:100;transition:opacity .3s}
+.screen.hidden{opacity:0;pointer-events:none}
+
+/* Level Select - horizontal path (landscape optimized) */
+#level-screen{background:linear-gradient(135deg,#1a3d1a 0%,#0d2a0d 50%,#0a1f0a 100%);
+  padding:.8rem 0;overflow:visible;flex-direction:row;flex-wrap:wrap;
+  align-content:center;justify-content:center;gap:0}
+#level-screen h1{width:100%;text-align:center;font-size:clamp(1.2rem,3vw,1.8rem);
+  margin-bottom:.2rem;text-shadow:0 2px 8px rgba(0,0,0,.5)}
+#level-screen .subtitle{width:100%;text-align:center;font-size:.7rem;opacity:.6;margin-bottom:.8rem}
+#level-path{position:relative;width:100%;height:200px;
+  overflow-x:scroll;overflow-y:hidden;-webkit-overflow-scrolling:touch;
+  touch-action:none;padding:0 10px}
+.level-node{position:absolute;width:52px;height:52px;border-radius:50%;
+  background:rgba(255,255,255,.1);border:3px solid rgba(255,255,255,.25);
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  cursor:pointer;transition:transform .15s;font-weight:700;font-size:.95rem}
+.level-node:active{transform:scale(.88)}
+.level-node.locked{opacity:.35;pointer-events:none;border-color:rgba(255,255,255,.1)}
+.level-node.current{border-color:#ffd700;background:rgba(255,215,0,.2);
+  box-shadow:0 0 15px rgba(255,215,0,.5);animation:currentPulse 1.5s infinite alternate}
+@keyframes currentPulse{from{box-shadow:0 0 10px rgba(255,215,0,.3)}to{box-shadow:0 0 20px rgba(255,215,0,.6)}}
+.level-node.completed{border-color:#4CAF50;background:rgba(76,175,80,.2)}
+.level-node .node-stars{font-size:.5rem;margin-top:1px}
+.level-node .lock{font-size:.75rem}
+.chapter-tag{position:absolute;font-size:.55rem;font-weight:700;padding:2px 8px;
+  border-radius:8px;letter-spacing:.5px;text-transform:uppercase;white-space:nowrap}
+.chapter-tag.forest{background:rgba(76,175,80,.3);color:#a5d6a7}
+.chapter-tag.desert{background:rgba(255,193,7,.3);color:#ffe082}
+.chapter-tag.rainynight{background:rgba(40,50,80,.3);color:#8090c0}
+.chapter-tag.city{background:rgba(200,150,50,.3);color:#f0c060}
+.chapter-tag.unused_rainy{display:none}
+.chapter-tag.stadium{background:rgba(33,150,243,.3);color:#90caf9}
+.chapter-tag.snow{background:rgba(200,220,240,.3);color:#e0e8f0}
+.chapter-tag.classroom{background:rgba(180,120,60,.3);color:#dcc090}
+.chapter-tag.factory{background:rgba(100,110,120,.3);color:#b0b8c0}
+.chapter-tag.beach{background:rgba(255,200,50,.3);color:#ffe066}
+.chapter-tag.underwater{background:rgba(20,80,140,.3);color:#60a0d0}
+.path-line{position:absolute;pointer-events:none;top:0;left:0}
+
+/* Game HUD */
+#hud{position:absolute;top:8px;left:0;right:0;z-index:50;pointer-events:none;
+  display:flex;align-items:flex-start;justify-content:center;padding:0 12px}
+#hud *{pointer-events:auto}
+#hud-left{display:flex;gap:8px;position:absolute;right:12px;top:0}
+#hud-right{position:absolute;left:12px;top:0}
+.hud-btn{width:36px;height:36px;border-radius:50%;border:2px solid rgba(255,255,255,.3);
+  background:rgba(0,0,0,.5);color:#fff;font-size:1.1rem;font-weight:900;
+  display:flex;align-items:center;justify-content:center;cursor:pointer;
+  backdrop-filter:blur(4px);text-shadow:0 1px 2px rgba(0,0,0,.5)}
+.hud-btn:active{transform:scale(.85);background:rgba(255,255,255,.2)}
+
+/* Star progress bar - Candy Crush style */
+#star-bar{display:flex;align-items:center;gap:0;
+  background:linear-gradient(180deg,rgba(60,30,10,.85),rgba(40,20,5,.9));
+  border:2px solid rgba(255,180,50,.4);
+  border-radius:18px;padding:5px 14px;
+  backdrop-filter:blur(4px);min-width:300px;max-width:400px;
+  box-shadow:0 2px 8px rgba(0,0,0,.4),inset 0 1px 0 rgba(255,255,255,.1)}
+#star-bar .timer-text{font-size:.85rem;font-weight:700;min-width:44px;text-align:center;
+  color:#ffd700;text-shadow:0 0 6px rgba(255,215,0,.5)}
+#star-bar-track{flex:1;height:14px;background:rgba(0,0,0,.4);
+  border-radius:7px;position:relative;margin:0 8px;
+  border:1px solid rgba(255,255,255,.1);overflow:visible}
+#star-bar-fill{height:100%;border-radius:7px;position:relative;
+  background:linear-gradient(90deg,#ff4444,#ff8800,#ffcc00,#88dd00);
+  width:100%;
+  box-shadow:0 0 8px rgba(255,150,0,.5),inset 0 2px 0 rgba(255,255,255,.3)}
+#star-bar-fill::after{content:'';position:absolute;right:-2px;top:-3px;
+  width:20px;height:20px;border-radius:50%;
+  background:radial-gradient(circle,rgba(255,255,200,1) 0%,rgba(255,200,50,.8) 30%,rgba(255,100,0,.4) 60%,transparent 70%);
+  animation:sparkle .8s infinite alternate;pointer-events:none}
+@keyframes sparkle{
+  0%{transform:scale(.8);opacity:.7;box-shadow:0 0 6px rgba(255,200,0,.6)}
+  50%{transform:scale(1.2);opacity:1;box-shadow:0 0 12px rgba(255,200,0,.9),0 0 20px rgba(255,100,0,.4)}
+  100%{transform:scale(.9);opacity:.8;box-shadow:0 0 8px rgba(255,200,0,.7)}
+}
+/* Sparkle particles */
+#star-bar-fill::before{content:'';position:absolute;right:-6px;top:-6px;
+  width:26px;height:26px;
+  background:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='26' height='26'%3E%3Ccircle cx='13' cy='5' r='1.5' fill='%23fff' opacity='.8'/%3E%3Ccircle cx='7' cy='10' r='1' fill='%23ffd700' opacity='.6'/%3E%3Ccircle cx='19' cy='12' r='1.2' fill='%23fff' opacity='.7'/%3E%3Ccircle cx='13' cy='18' r='1' fill='%23ffa500' opacity='.5'/%3E%3Ccircle cx='5' cy='20' r='.8' fill='%23fff' opacity='.4'/%3E%3C/svg%3E") no-repeat;
+  animation:particleDrift 1.2s infinite;pointer-events:none}
+@keyframes particleDrift{
+  0%{transform:translateY(0) scale(1);opacity:1}
+  100%{transform:translateY(-8px) scale(.6);opacity:0}
+}
+.star-marker{position:absolute;top:-10px;font-size:.55rem;
+  transform:translateX(-50%);filter:drop-shadow(0 1px 2px rgba(0,0,0,.5));
+  white-space:nowrap}
+.star-marker.dimmed{filter:grayscale(1) brightness(.5);transform:translateX(-50%) scale(.75);
+  transition:filter .3s,transform .3s}
+#timer{font-size:1.1rem;font-weight:700;color:#fff;
+  background:rgba(0,0,0,.5);padding:4px 14px;border-radius:12px;
+  backdrop-filter:blur(4px)}
+#timer.warning{color:#ff4444;animation:pulse .5s infinite alternate}
+@keyframes pulse{from{opacity:1}to{opacity:.6}}
+
+/* Minimap */
+#minimap-wrap{position:absolute;top:8px;left:8px;z-index:55;
+  transition:all .6s cubic-bezier(.4,0,.2,1)}
+#minimap-wrap.fullscreen{top:50%;left:50%;
+  transform:translate(-50%,-50%) scale(1);z-index:200}
+#minimap-wrap.shrink{animation:shrinkMap .6s forwards}
+@keyframes shrinkMap{
+  from{top:50%;left:50%;transform:translate(-50%,-50%) scale(1)}
+  to{top:8px;left:8px;transform:translate(0,0) scale(1)}
+}
+#minimap{border-radius:6px;border:2px solid rgba(255,255,255,.3);
+  background:rgba(0,0,0,.6)}
+
+/* Controls */
+#controls{position:absolute;bottom:0;left:0;right:0;
+  padding:0 12px 12px;z-index:50;
+  display:flex;justify-content:space-between;align-items:flex-end;
+  pointer-events:none}
+#controls *{pointer-events:auto}
+
+#joystick-zone{width:130px;height:130px;position:relative}
+#joystick-base{width:110px;height:110px;border-radius:50%;
+  background:rgba(255,255,255,.08);border:2px solid rgba(255,255,255,.2);
+  position:absolute;bottom:0;left:0}
+#joystick-knob{width:46px;height:46px;border-radius:50%;
+  background:rgba(255,255,255,.5);border:2px solid rgba(255,255,255,.3);
+  position:absolute;top:50%;left:50%;transform:translate(-50%,-50%)}
+
+#action-btns{position:relative;width:170px;height:170px;margin-bottom:5px}
+.action-btn{width:62px;height:62px;border-radius:50%;position:absolute;
+  border:2px solid rgba(255,255,255,.2);
+  background:radial-gradient(circle at 30% 30%,rgba(255,255,255,.18),rgba(255,255,255,.05));
+  backdrop-filter:blur(2px);
+  box-shadow:0 2px 8px rgba(0,0,0,.3),inset 0 1px 0 rgba(255,255,255,.15);
+  color:#fff;font-size:.55rem;font-weight:700;
+  display:flex;align-items:center;justify-content:center;
+  user-select:none;-webkit-user-select:none;letter-spacing:.5px}
+.action-btn:active{background:rgba(255,255,255,.3);transform:scale(.9)}
+.action-btn .btn-label{position:absolute;bottom:3px;left:50%;transform:translateX(-50%);
+  font-size:.45rem;font-weight:600;opacity:.8;letter-spacing:.5px}
+.action-btn.run-active{background:rgba(255,200,0,.4);border-color:rgba(255,200,0,.6)}
+
+/* Countdown */
+#countdown{position:absolute;inset:0;z-index:150;
+  display:flex;align-items:center;justify-content:center;
+  font-size:4rem;font-weight:900;color:#fff;
+  text-shadow:0 4px 20px rgba(0,0,0,.5);
+  background:rgba(0,0,0,.3);pointer-events:none}
+#countdown.hidden{display:none}
+
+/* Loading cover - solid color screen during level build */
+#loading-cover{position:absolute;inset:0;z-index:160;
+  display:flex;align-items:center;justify-content:center;
+  font-size:1rem;font-weight:700;color:rgba(255,255,255,.7)}
+#loading-cover.hidden{display:none}
+
+/* Modals */
+.modal-overlay{background:rgba(0,0,0,.8);backdrop-filter:blur(12px)}
+.modal-content{text-align:center;padding:2rem;max-width:340px;
+  background:rgba(255,255,255,.05);border-radius:20px;border:1px solid rgba(255,255,255,.1)}
+.modal-content h2{font-size:1.6rem;margin-bottom:.3rem}
+.modal-content .stars{font-size:2.2rem;margin:.8rem 0}
+.modal-content .info{font-size:.9rem;opacity:.7;margin-bottom:1.2rem}
+.modal-btns{display:flex;flex-direction:column;gap:.6rem;align-items:center}
+
+/* Result overlay - 3D scene visible as background */
+.result-overlay{background:transparent!important;justify-content:space-between;
+  padding:12px 20px;pointer-events:none}
+.result-overlay *{pointer-events:auto}
+.result-top{text-align:center;
+  background:rgba(0,0,0,.5);backdrop-filter:blur(8px);
+  padding:12px 24px;border-radius:16px;
+  align-self:center;margin-top:8px}
+.result-top h2{font-size:1.4rem;margin-bottom:4px;
+  text-shadow:0 2px 10px rgba(0,0,0,.5)}
+.result-top .stars{font-size:1.8rem;margin:4px 0}
+.result-top .info{font-size:.8rem;opacity:.8;margin-top:4px}
+.result-bottom{display:flex;gap:10px;justify-content:center;
+  align-self:center;margin-bottom:12px}
+.result-bottom .btn{min-width:100px;padding:.6rem 1.2rem;font-size:.85rem}
+
+/* Fail specific styling */
+.result-overlay.fail .result-top{
+  background:rgba(40,0,0,.6);border:1px solid rgba(255,50,50,.3)}
+.btn{padding:.7rem 2rem;border:none;border-radius:10px;font-size:1rem;
+  font-weight:700;cursor:pointer;transition:transform .1s;min-width:160px}
+.btn:active{transform:scale(.93)}
+.btn-primary{background:linear-gradient(135deg,#4CAF50,#2E7D32);color:#fff}
+.btn-secondary{background:rgba(255,255,255,.12);color:#fff;border:1px solid rgba(255,255,255,.2)}
+.btn-danger{background:linear-gradient(135deg,#e74c3c,#c0392b);color:#fff}
+
+/* How-to-play slider */
+.how-container{display:flex;flex-direction:column;align-items:center;
+  padding:12px;max-width:420px;width:90%}
+.how-header{text-align:center;margin-bottom:8px}
+.how-header h2{font-size:1.2rem;margin-bottom:6px}
+.how-dots{display:flex;gap:6px;justify-content:center}
+.how-dot{width:8px;height:8px;border-radius:50%;background:rgba(255,255,255,.25);transition:all .2s}
+.how-dot.active{background:#ffd700;transform:scale(1.3)}
+.how-slider{display:flex;overflow-x:scroll;scroll-snap-type:x mandatory;
+  gap:0;width:100%;border-radius:14px;
+  -webkit-overflow-scrolling:touch;scrollbar-width:none;touch-action:pan-x}
+.how-slider::-webkit-scrollbar{display:none}
+.how-card{flex:0 0 100%;scroll-snap-align:start;scroll-snap-stop:always;
+  background:rgba(255,255,255,.05);border-radius:14px;
+  border:1px solid rgba(255,255,255,.1);overflow:hidden;
+  display:flex;flex-direction:column}
+.how-card-img{height:110px;display:flex;flex-direction:column;
+  align-items:center;justify-content:center;padding:12px}
+.how-card-text{padding:10px 14px;flex:1}
+.how-card-title{font-size:.9rem;font-weight:700;color:#ffd700;margin-bottom:4px}
+.how-card-text p{font-size:.7rem;line-height:1.5;opacity:.9}
+
+/* Confetti animation */
+@keyframes confettiFall{
+  0%{transform:translateY(0) rotate(0deg);opacity:1}
+  80%{opacity:.8}
+  100%{transform:translateY(450px) rotate(720deg);opacity:0}
+}
+@keyframes sparkBurst{
+  0%{transform:scale(0);opacity:0}
+  30%{transform:scale(1.5);opacity:1}
+  100%{transform:scale(0.3);opacity:0}
+}
+/* Fail effect */
+@keyframes failDrift{
+  0%{transform:translateY(0) scale(1);opacity:.8}
+  100%{transform:translateY(250px) scale(0.2);opacity:0}
+}
+@keyframes crackAppear{
+  0%{opacity:0;transform:scaleX(0) rotate(var(--angle,0deg))}
+  100%{opacity:1;transform:scaleX(1) rotate(var(--angle,0deg))}
+}
+.float-text{position:absolute;z-index:200;font-weight:900;font-size:1.2rem;
+  pointer-events:none;animation:floatUp 1.2s ease-out forwards}
+@keyframes floatUp{0%{transform:translateY(0);opacity:1}100%{transform:translateY(-40px);opacity:0}}
+@keyframes bubbleHop{0%,100%{transform:translateY(0)}50%{transform:translateY(-3px)}}
+</style>
+</head>
+<body>
+<div id="game-root">
+
+<!-- Level Select Screen -->
+<div id="level-screen" class="screen">
+  <div style="position:absolute;top:8px;right:12px;display:flex;gap:8px;z-index:10">
+    <button class="hud-btn" onclick="toggleSound()" id="btn-sound" title="Sound"><svg width="18" height="18" viewBox="0 0 24 24" fill="white"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/></svg></button>
+    <button class="hud-btn" onclick="showHowModal()" title="Help"><svg width="18" height="18" viewBox="0 0 24 24" fill="white"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 17h-2v-2h2v2zm2.07-7.75l-.9.92C13.45 12.9 13 13.5 13 15h-2v-.5c0-1.1.45-2.1 1.17-2.83l1.24-1.26c.37-.36.59-.86.59-1.41 0-1.1-.9-2-2-2s-2 .9-2 2H8c0-2.21 1.79-4 4-4s4 1.79 4 4c0 .88-.36 1.68-.93 2.25z"/></svg></button>
+    <button class="hud-btn" onclick="showLangPicker()" title="Language" id="btn-lang">🌐</button>
+  </div>
+  <h1>探险迷宫</h1>
+  <p class="subtitle">Find your way through the maze!</p>
+  <div id="level-path"></div>
+</div>
+
+<!-- Result Modal (win) - semi-transparent overlay, 3D scene visible behind -->
+<div id="result-modal" class="screen hidden result-overlay">
+  <div class="result-top">
+    <h2 id="result-title">MAZE CLEARED!</h2>
+    <div class="stars" id="result-stars"></div>
+    <div class="info" id="result-info"></div>
+  </div>
+  <div class="result-bottom">
+    <button class="btn btn-primary" id="btn-next" onclick="nextLevel()">NEXT LEVEL</button>
+    <button class="btn btn-secondary" onclick="retryLevel()">RETRY</button>
+    <button class="btn btn-secondary" onclick="goHome()">HOME</button>
+  </div>
+</div>
+
+<!-- Fail Modal (time up) - semi-transparent, 3D visible -->
+<div id="fail-modal" class="screen hidden result-overlay fail">
+  <div class="result-top">
+    <h2>TIME'S UP!</h2>
+    <div class="info">You ran out of time.</div>
+  </div>
+  <div class="result-bottom">
+    <button class="btn btn-danger" onclick="retryLevel()">RETRY</button>
+    <button class="btn btn-secondary" onclick="goHome()">HOME</button>
+  </div>
+</div>
+
+<!-- Countdown -->
+<div id="countdown" class="hidden"></div>
+
+<!-- Loading cover (hides 3D during level build) -->
+<div id="loading-cover" class="hidden"></div>
+
+<!-- HUD -->
+<div id="hud" class="hidden">
+  <div id="hud-left">
+    <button class="hud-btn" onclick="goHome()" title="Home"><svg width="18" height="18" viewBox="0 0 24 24" fill="white"><path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/></svg></button>
+    <button class="hud-btn" onclick="showHowModal()" title="Help"><svg width="18" height="18" viewBox="0 0 24 24" fill="white"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 17h-2v-2h2v2zm2.07-7.75l-.9.92C13.45 12.9 13 13.5 13 15h-2v-.5c0-1.1.45-2.1 1.17-2.83l1.24-1.26c.37-.36.59-.86.59-1.41 0-1.1-.9-2-2-2s-2 .9-2 2H8c0-2.21 1.79-4 4-4s4 1.79 4 4c0 .88-.36 1.68-.93 2.25z"/></svg></button>
+    <button class="hud-btn" id="btn-sound-game" onclick="toggleSound()" title="Sound"><svg width="18" height="18" viewBox="0 0 24 24" fill="white"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/></svg></button>
+    <button class="hud-btn" onclick="showLangPicker()" title="Language">🌐</button>
+  </div>
+  <div id="star-bar">
+    <span class="timer-text" id="timer">00:00</span>
+    <div id="star-bar-track">
+      <div id="star-bar-fill"></div>
+      <span class="star-marker" id="mark-star3" style="left:0%"></span>
+      <span class="star-marker" id="mark-star2" style="left:50%"></span>
+      <span class="star-marker" id="mark-star1" style="left:100%"></span>
+    </div>
+  </div>
+  <div id="hud-right"></div>
+</div>
+
+<!-- How to Play (in-game) -->
+<div id="how-modal" class="screen hidden modal-overlay">
+  <div class="how-container">
+    <div class="how-header">
+      <h2>How to Play</h2>
+      <div class="how-dots" id="how-dots"></div>
+    </div>
+    <div class="how-slider" id="how-slider">
+      <!-- Card 1: Find the Exit -->
+      <div class="how-card">
+        <div class="how-card-img" style="background:linear-gradient(135deg,#1a3d1a,#2d5a27)">
+          <svg width="160" height="80" viewBox="0 0 160 80">
+            <rect x="8" y="5" width="144" height="70" fill="#0a1a0a" rx="4"/>
+            <!-- Ultra-simple maze: 2 horizontal walls with gaps creating S-path -->
+            <!-- Outer border -->
+            <rect x="20" y="14" width="120" height="52" fill="none" stroke="#fff" stroke-width="2.5" rx="2"/>
+            <!-- Wall 1: y=32, from LEFT wall to x=100 (gap on RIGHT side x=100-140) -->
+            <line x1="20" y1="32" x2="100" y2="32" stroke="#fff" stroke-width="2"/>
+            <!-- Wall 2: y=48, from x=60 to RIGHT wall (gap on LEFT side x=20-60) -->
+            <line x1="60" y1="48" x2="140" y2="48" stroke="#fff" stroke-width="2"/>
+            <!-- Player top-left -->
+            <circle cx="35" cy="23" r="4" fill="#ffff00"/>
+            <!-- Goal bottom-right -->
+            <circle cx="125" cy="57" r="5" fill="#00ff88"/>
+            <!-- Path: right along top, down through right gap, left along middle, down through left gap, right to goal -->
+            <path d="M42 23 L110 23 L110 40 L45 40 L45 55 L120 55" stroke="#ffd700" stroke-width="1.5" fill="none" stroke-dasharray="4,3"/>
+            <polygon points="118,51 125,55 118,59" fill="#ffd700"/>
+          </svg>
+        </div>
+        <div class="how-card-text">
+          <div class="how-card-title">Find the Exit</div>
+          <p id="help-find-desc">Navigate the 3D maze and reach the <span style="color:#00ff88;font-weight:700">green beacon</span> before the countdown reaches zero!</p>
+          <p id="help-find-tip" style="margin-top:4px;opacity:.7;font-size:.65rem">At level start, the full map is shown for 2 seconds. Memorize the path!</p>
+        </div>
+      </div>
+      <!-- Card 2: Star Rating -->
+      <div class="how-card">
+        <div class="how-card-img" style="background:linear-gradient(135deg,#3a2a00,#5a4400)">
+          <svg width="180" height="70" viewBox="0 0 180 70">
+            <!-- Progress bar frame -->
+            <rect x="10" y="25" width="160" height="16" rx="8" fill="#1a1008" stroke="rgba(255,180,50,.4)" stroke-width="1.5"/>
+            <!-- Fill -->
+            <rect x="11" y="26" width="110" height="14" rx="7" fill="url(#barGrad)"/>
+            <defs><linearGradient id="barGrad"><stop offset="0%" stop-color="#ff4444"/><stop offset="50%" stop-color="#ffcc00"/><stop offset="100%" stop-color="#88dd00"/></linearGradient></defs>
+            <!-- Star markers -->
+            <text x="60" y="20" font-size="8" text-anchor="middle">⭐⭐⭐</text>
+            <text x="105" y="20" font-size="8" text-anchor="middle">⭐⭐</text>
+            <text x="155" y="20" font-size="8" text-anchor="middle">⭐</text>
+            <!-- Timer -->
+            <text x="18" y="35" font-size="7" fill="#ffd700" font-weight="bold">01:23</text>
+            <!-- Sparkle -->
+            <circle cx="121" cy="33" r="5" fill="#fff" opacity=".6"/>
+          </svg>
+        </div>
+        <div class="how-card-text">
+          <div class="how-card-title">Star Rating</div>
+          <p id="help-star-desc">⭐⭐⭐ = Finish very fast (shortest path + sprint)<br>
+          ⭐⭐ = Good time<br>
+          ⭐ = Just finish before time runs out</p>
+          <p id="help-star-tip" style="margin-top:4px;color:#88ff88;font-size:.65rem">Hit monsters to GAIN bonus time (+seconds)!</p>
+        </div>
+      </div>
+      <!-- Card 3: Controls -->
+      <div class="how-card">
+        <div class="how-card-img" style="background:linear-gradient(135deg,#1a2040,#2a3060)">
+          <div style="display:flex;gap:24px;align-items:center">
+            <div style="width:44px;height:44px;border-radius:50%;border:2px solid rgba(255,255,255,.3);background:rgba(255,255,255,.08);display:flex;align-items:center;justify-content:center">
+              <div style="width:18px;height:18px;border-radius:50%;background:rgba(255,255,255,.5)"></div>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:5px">
+              <div style="display:flex;align-items:center;gap:4px"><div style="width:22px;height:22px;border-radius:50%;border:1.5px solid rgba(255,255,255,.3);background:rgba(255,255,255,.1);display:flex;align-items:center;justify-content:center;font-size:.4rem">👊</div><span style="font-size:.5rem;opacity:.8">Beat</span></div>
+              <div style="display:flex;align-items:center;gap:4px"><div style="width:22px;height:22px;border-radius:50%;border:1.5px solid rgba(255,255,255,.3);background:rgba(255,255,255,.1);display:flex;align-items:center;justify-content:center;font-size:.4rem">🦘</div><span style="font-size:.5rem;opacity:.8">Jump</span></div>
+              <div style="display:flex;align-items:center;gap:4px"><div style="width:22px;height:22px;border-radius:50%;border:1.5px solid rgba(255,255,255,.3);background:rgba(255,255,255,.1);display:flex;align-items:center;justify-content:center;font-size:.4rem">🏃</div><span style="font-size:.5rem;opacity:.8">Run</span></div>
+            </div>
+          </div>
+        </div>
+        <div class="how-card-text">
+          <div class="how-card-title">Controls</div>
+          <p id="help-ctrl-desc"><b>Left Joystick</b> — Move character<br>
+          <b>Swipe Screen</b> — Rotate camera<br>
+          <b>Beat</b> — Punch nearby monsters<br>
+          <b>Jump</b> — Jump over monsters<br>
+          <b>Run</b> — Sprint (tap = 2s boost)</p>
+        </div>
+      </div>
+      <!-- Card 4: Monster Combat -->
+      <div class="how-card">
+        <div class="how-card-img" style="background:linear-gradient(135deg,#1a1a2a,#2a2a3a)">
+          <svg width="160" height="75" viewBox="0 0 160 75">
+            <!-- Monster (left side, purple on dark bg = visible) -->
+            <circle cx="40" cy="38" r="14" fill="#6a00cc" stroke="#9944ff" stroke-width="1.5"/>
+            <circle cx="35" cy="33" r="3" fill="#ff2222"/>
+            <circle cx="45" cy="33" r="3" fill="#ff2222"/>
+            <polygon points="33,24 30,14 37,22" fill="#440066" stroke="#9944ff" stroke-width=".5"/>
+            <polygon points="47,24 50,14 43,22" fill="#440066" stroke="#9944ff" stroke-width=".5"/>
+            <!-- Weapon -->
+            <rect x="53" y="33" width="14" height="3.5" rx="1.5" fill="#8a6a3a"/>
+            <circle cx="67" cy="35" r="4.5" fill="#888" stroke="#aaa" stroke-width=".5"/>
+            <!-- VS effect -->
+            <text x="78" y="42" font-size="12" fill="#ffd700">⚡</text>
+            <!-- Human figure (right side - proper stick figure) -->
+            <circle cx="110" cy="22" r="5" fill="#ffcc88"/>
+            <rect x="106" y="28" width="8" height="14" rx="3" fill="#3377cc"/>
+            <line x1="106" y1="32" x2="98" y2="40" stroke="#ffcc88" stroke-width="2.5" stroke-linecap="round"/>
+            <line x1="114" y1="32" x2="122" y2="28" stroke="#ffcc88" stroke-width="2.5" stroke-linecap="round"/>
+            <line x1="108" y1="42" x2="104" y2="55" stroke="#333" stroke-width="2.5" stroke-linecap="round"/>
+            <line x1="112" y1="42" x2="116" y2="55" stroke="#333" stroke-width="2.5" stroke-linecap="round"/>
+            <!-- Time labels -->
+            <text x="25" y="65" font-size="8" fill="#ff5555" font-weight="bold">-3s</text>
+            <text x="100" y="65" font-size="8" fill="#55ff55" font-weight="bold">+3s</text>
+            <!-- Jump arc -->
+            <path d="M125 18 C130 5 140 5 145 18" stroke="#66ccff" stroke-width="1.5" fill="none"/>
+            <text x="128" y="8" font-size="6" fill="#66ccff">Jump!</text>
+          </svg>
+        </div>
+        <div class="how-card-text">
+          <div class="how-card-title">Monster Combat</div>
+          <p id="help-monster-desc"><span style="color:#ff6666">Monster hits you</span> → Lose time!<br>
+          <span style="color:#66ff66">You hit monster (Beat)</span> → Gain time!<br>
+          <span style="color:#66ccff">Jump over monster</span> → Safe!<br>
+          <span style="opacity:.7;font-size:.65rem">3× quick Beat = Sweep Kick combo!</span></p>
+        </div>
+      </div>
+      <!-- Card 5: Minimap -->
+      <div class="how-card">
+        <div class="how-card-img" style="background:linear-gradient(135deg,#0a1a0a,#1a3a1a)">
+          <svg width="80" height="80" viewBox="0 0 80 80">
+            <rect x="2" y="2" width="76" height="76" rx="4" fill="#0a0a14" stroke="rgba(255,255,255,.2)" stroke-width="1"/>
+            <!-- Dark overlay (fog) -->
+            <rect x="2" y="2" width="76" height="76" fill="rgba(0,0,0,.75)" rx="4"/>
+            <!-- Visible area circle -->
+            <circle cx="30" cy="35" r="20" fill="rgba(40,40,30,.9)"/>
+            <!-- Maze walls in visible area -->
+            <line x1="20" y1="25" x2="40" y2="25" stroke="#fff" stroke-width="2"/>
+            <line x1="20" y1="25" x2="20" y2="45" stroke="#fff" stroke-width="2"/>
+            <line x1="30" y1="35" x2="30" y2="45" stroke="#fff" stroke-width="2"/>
+            <line x1="35" y1="25" x2="35" y2="35" stroke="#fff" stroke-width="1.5"/>
+            <line x1="20" y1="45" x2="35" y2="45" stroke="#fff" stroke-width="2"/>
+            <!-- Player dot (yellow) -->
+            <circle cx="30" cy="35" r="3.5" fill="#ffff00"/>
+            <!-- Glow around player -->
+            <circle cx="30" cy="35" r="8" fill="rgba(255,255,0,.1)"/>
+            <!-- Goal dot (green, always visible) -->
+            <circle cx="65" cy="65" r="3.5" fill="#00ff88"/>
+          </svg>
+        </div>
+        <div class="how-card-text">
+          <div class="how-card-title">Minimap</div>
+          <p id="help-map-desc"><span style="color:#ffff00">● Yellow</span> = Your position (with visible area)<br>
+          <span style="color:#00ff88">● Green</span> = Goal (always visible)<br>
+          White lines = Maze walls nearby<br>
+          <span style="opacity:.7;font-size:.65rem">Dark area = Unexplored (fog of war)</span></p>
+        </div>
+      </div>
+      <!-- Card 6: Themes -->
+      <div class="how-card">
+        <div class="how-card-img" id="theme-showcase" style="background:#1a2a1a;position:relative;overflow:hidden">
+          <div id="theme-carousel" style="display:flex;width:100%;height:100%;transition:transform 1s ease"></div>
+        </div>
+        <div class="how-card-text">
+          <div class="how-card-title">10 Unique Themes</div>
+          <p id="help-theme-desc">Progress through levels to unlock new themed worlds!<br><br>
+          🌲 Forest · 🏜️ Desert · 🌃 Rainy Night · 📚 Classroom · ⚽ Stadium<br>
+          ❄️ Snow · 🏭 Factory · 🏖️ Beach · 🐠 Ocean · 🏙️ City</p>
+        </div>
+      </div>
+    </div>
+    <button class="btn btn-primary" style="margin-top:.8rem;align-self:center" onclick="hideHowModal()">GOT IT!</button>
+  </div>
+</div>
+
+<!-- Minimap -->
+<div id="minimap-wrap" class="hidden">
+  <canvas id="minimap" width="200" height="200"></canvas>
+  <div style="display:flex;align-items:center;justify-content:center;gap:6px;margin-top:3px">
+    <div id="level-label" style="font-size:.55rem;opacity:.8;color:#fff;text-shadow:0 1px 3px rgba(0,0,0,.6)"></div>
+    <button class="hud-btn" id="btn-theme-switch" onclick="switchTheme()" title="Switch Theme" style="display:none;width:24px;height:24px;background:rgba(255,215,0,.25);border-color:rgba(255,215,0,.5)"><svg width="14" height="14" viewBox="0 0 24 24" fill="#ffd700"><path d="M12 4V1L8 5l4 4V6c3.31 0 6 2.69 6 6 0 1.01-.25 1.97-.7 2.8l1.46 1.46C19.54 15.03 20 13.57 20 12c0-4.42-3.58-8-8-8zm0 14c-3.31 0-6-2.69-6-6 0-1.01.25-1.97.7-2.8L5.24 7.74C4.46 8.97 4 10.43 4 12c0 4.42 3.58 8 8 8v3l4-4-4-4v3z"/></svg></button>
+  </div>
+</div>
+
+<!-- Controls -->
+<div id="controls" class="hidden">
+  <div id="joystick-zone">
+    <div id="joystick-base">
+      <div id="joystick-knob"></div>
+    </div>
+  </div>
+  <div id="action-btns">
+    <div class="action-btn" id="btn-run" style="bottom:12px;right:10px"><svg width="22" height="22" viewBox="0 0 64 64" fill="none"><circle cx="40" cy="14" r="5.5" fill="rgba(255,255,255,.9)"/><path d="M24 56l5-14 7 5v11h4V43l-6-5 2-5c3 3 7 5.5 11 6v-4c-3.5-.5-6.5-2.5-8.5-5l-3-3.5c-1-1.2-2.2-2-3.8-2-.5 0-1 .1-1.5.2L21 29v9h4v-6l3.5-1.5-4.5 15-7 2 1 4 6-1.5" fill="rgba(255,255,255,.9)"/></svg><span class="btn-label" id="label-run">Run</span></div>
+    <div class="action-btn" id="btn-jump" style="bottom:60px;right:55px"><svg width="22" height="22" viewBox="0 0 64 64" fill="none"><circle cx="32" cy="10" r="5" fill="rgba(255,255,255,.9)"/><path d="M25 54l3-12h-5l5-16h2l-2 12h4l2-12h2v12l5 4-3 12h-4l2-8-3-3-2 8h-4z" fill="rgba(255,255,255,.9)"/><path d="M28 26l-4-4M36 26l4-4" stroke="rgba(255,255,255,.8)" stroke-width="2.5" stroke-linecap="round"/></svg><span class="btn-label" id="label-jump">Jump</span></div>
+    <div class="action-btn" id="btn-punch" style="bottom:100px;right:5px"><svg width="22" height="22" viewBox="0 0 64 64" fill="none"><path d="M48 28c0-2-1.5-3.5-3.5-3.5H42v-4c0-2-1.5-3.5-3.5-3.5S35 18.5 35 20.5V24h-4v-6c0-2-1.5-3.5-3.5-3.5S24 16 24 18v6h-2v-4c0-2-1.5-3.5-3.5-3.5S15 18 15 20v14c0 1 .4 1.8 1 2.4L20 40l2 14h20l3-14h2c1 0 1.8-.6 2.2-1.4L48 28z" fill="rgba(255,255,255,.9)" stroke="rgba(255,255,255,.3)" stroke-width="1"/></svg><span class="btn-label" id="label-beat">Beat</span></div>
+  </div>
+</div>
+
+<script type="importmap">
+{"imports":{
+  "three":"https://cdn.jsdelivr.net/npm/three@0.165.0/build/three.module.js",
+  "three/addons/":"https://cdn.jsdelivr.net/npm/three@0.165.0/examples/jsm/"
+}}
+</script>
+
+<script type="module">
+import * as THREE from 'three';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+
+// ===== i18n =====
+const LANGS = {
+  en: {name:'EN', dir:'ltr'},
+  ar: {name:'عربي', dir:'rtl'},
+  hi: {name:'हिंदी', dir:'ltr'},
+  tr: {name:'Türkçe', dir:'ltr'},
+  th: {name:'ไทย', dir:'ltr'},
+  vi: {name:'Tiếng Việt', dir:'ltr'},
+  id: {name:'Indonesia', dir:'ltr'},
+  fil: {name:'Filipino', dir:'ltr'},
+  pt: {name:'Português', dir:'ltr'},
+  bn: {name:'বাংলা', dir:'ltr'},
+  ur: {name:'اردو', dir:'rtl'},
+  ms: {name:'Melayu', dir:'ltr'}
+};
+
+const I18N = {
+  title: {en:'Maze Adventure',ar:'مغامرة المتاهة',hi:'भूलभुलैया साहसिक',tr:'Labirent Macerası',th:'ผจญภัยเขาวงกต',vi:'Phiêu Lưu Mê Cung',id:'Petualangan Labirin',fil:'Maze Adventure',pt:'Aventura no Labirinto',bn:'গোলকধাঁধা অভিযান',ur:'بھول بھلیاں مہم',ms:'Pengembaraan Maze'},
+  subtitle: {en:'Find your way through the maze!',ar:'اعثر على طريقك عبر المتاهة!',hi:'भूलभुलैया से रास्ता खोजें!',tr:'Labirentten çıkış yolunu bul!',th:'หาทางออกจากเขาวงกต!',vi:'Tìm đường qua mê cung!',id:'Temukan jalanmu melewati labirin!',fil:'Hanapin ang daan sa maze!',pt:'Encontre o caminho pelo labirinto!',bn:'গোলকধাঁধা দিয়ে পথ খুঁজুন!',ur:'بھول بھلیاں سے راستہ تلاش کریں!',ms:'Cari jalan melalui maze!'},
+  start: {en:'START',ar:'ابدأ',hi:'शुरू',tr:'BAŞLA',th:'เริ่ม',vi:'BẮT ĐẦU',id:'MULAI',fil:'SIMULA',pt:'INICIAR',bn:'শুরু',ur:'شروع',ms:'MULA'},
+  howToPlay: {en:'How to Play',ar:'كيفية اللعب',hi:'कैसे खेलें',tr:'Nasıl Oynanır',th:'วิธีเล่น',vi:'Cách chơi',id:'Cara Bermain',fil:'Paano Maglaro',pt:'Como Jogar',bn:'কিভাবে খেলবেন',ur:'کیسے کھیلیں',ms:'Cara Bermain'},
+  gotIt: {en:'GOT IT!',ar:'فهمت!',hi:'समझ गया!',tr:'ANLADIM!',th:'เข้าใจแล้ว!',vi:'HIỂU RỒI!',id:'MENGERTI!',fil:'NAIINTINDIHAN!',pt:'ENTENDI!',bn:'বুঝেছি!',ur:'سمجھ آ گئی!',ms:'FAHAM!'},
+  complete: {en:'Complete!',ar:'مكتمل!',hi:'पूर्ण!',tr:'Tamamlandı!',th:'สำเร็จ!',vi:'Hoàn thành!',id:'Selesai!',fil:'Tapos!',pt:'Completo!',bn:'সম্পূর্ণ!',ur:'مکمل!',ms:'Selesai!'},
+  nextLevel: {en:'NEXT LEVEL',ar:'المستوى التالي',hi:'अगला स्तर',tr:'SONRAKİ SEVİYE',th:'ด่านถัดไป',vi:'MÀN TIẾP',id:'LEVEL BERIKUT',fil:'SUSUNOD',pt:'PRÓXIMO NÍVEL',bn:'পরবর্তী লেভেল',ur:'اگلا مرحلہ',ms:'TAHAP SETERUSNYA'},
+  retry: {en:'RETRY',ar:'إعادة',hi:'पुनः प्रयास',tr:'TEKRAR',th:'ลองอีกครั้ง',vi:'THỬ LẠI',id:'ULANGI',fil:'ULITIN',pt:'TENTAR DE NOVO',bn:'আবার চেষ্টা',ur:'دوبارہ',ms:'CUBA LAGI'},
+  home: {en:'HOME',ar:'الرئيسية',hi:'होम',tr:'ANA SAYFA',th:'หน้าหลัก',vi:'TRANG CHỦ',id:'BERANDA',fil:'HOME',pt:'INÍCIO',bn:'হোম',ur:'ہوم',ms:'UTAMA'},
+  quit: {en:'Quit',ar:'خروج',hi:'छोड़ें',tr:'Çık',th:'ออก',vi:'Thoát',id:'Keluar',fil:'Lumabas',pt:'Sair',bn:'বাহির',ur:'باہر',ms:'Keluar'},
+  cancel: {en:'Cancel',ar:'إلغاء',hi:'रद्द करें',tr:'İptal',th:'ยกเลิก',vi:'Hủy',id:'Batal',fil:'Kanselahin',pt:'Cancelar',bn:'বাতিল',ur:'منسوخ',ms:'Batal'},
+  quitGame: {en:'Quit current game?',ar:'هل تريد الخروج من اللعبة؟',hi:'वर्तमान खेल छोड़ें?',tr:'Oyundan çıkmak istiyor musun?',th:'ออกจากเกมปัจจุบัน?',vi:'Thoát trận đấu hiện tại?',id:'Keluar dari game saat ini?',fil:'Umalis sa laro?',pt:'Sair do jogo atual?',bn:'বর্তমান গেম ছাড়বেন?',ur:'موجودہ گیم چھوڑیں؟',ms:'Keluar dari permainan?'},
+  timesUp: {en:"TIME'S UP!",ar:'انتهى الوقت!',hi:'समय समाप्त!',tr:'SÜRE DOLDU!',th:'หมดเวลา!',vi:'HẾT GIỜ!',id:'WAKTU HABIS!',fil:'TAPOS ANG ORAS!',pt:'TEMPO ESGOTADO!',bn:'সময় শেষ!',ur:'وقت ختم!',ms:'MASA TAMAT!'},
+  timesUpSub: {en:'You ran out of time.',ar:'نفد وقتك.',hi:'आपका समय समाप्त हो गया।',tr:'Zamanın doldu.',th:'เวลาหมดแล้ว',vi:'Bạn đã hết thời gian.',id:'Waktu kamu habis.',fil:'Naubos ang oras mo.',pt:'Seu tempo acabou.',bn:'আপনার সময় শেষ হয়ে গেছে।',ur:'آپ کا وقت ختم ہو گیا۔',ms:'Masa anda sudah tamat.'},
+  switchTheme: {en:'Click to switch between 10 themes!',ar:'انقر للتبديل بين 10 سمات!',hi:'10 थीम के बीच स्विच करें!',tr:'10 tema arasında geçiş yap!',th:'คลิกเพื่อสลับ 10 ธีม!',vi:'Nhấn để đổi 10 chủ đề!',id:'Klik untuk ganti 10 tema!',fil:'I-click para sa 10 themes!',pt:'Clique para trocar entre 10 temas!',bn:'১০টি থিম পরিবর্তন করুন!',ur:'10 تھیمز تبدیل کریں!',ms:'Klik untuk tukar 10 tema!'},
+  level: {en:'Level',ar:'المستوى',hi:'स्तर',tr:'Seviye',th:'ด่าน',vi:'Màn',id:'Level',fil:'Level',pt:'Nível',bn:'লেভেল',ur:'مرحلہ',ms:'Tahap'},
+  time: {en:'Time',ar:'الوقت',hi:'समय',tr:'Süre',th:'เวลา',vi:'Thời gian',id:'Waktu',fil:'Oras',pt:'Tempo',bn:'সময়',ur:'وقت',ms:'Masa'},
+  findExit: {en:'Find the Exit',ar:'اعثر على المخرج',hi:'निकास खोजें',tr:'Çıkışı Bul',th:'หาทางออก',vi:'Tìm Lối Ra',id:'Temukan Jalan Keluar',fil:'Hanapin ang Labasan',pt:'Encontre a Saída',bn:'বের হওয়ার পথ খুঁজুন',ur:'باہر نکلنے کا راستہ تلاش کریں',ms:'Cari Jalan Keluar'},
+  starRating: {en:'Star Rating',ar:'تقييم النجوم',hi:'स्टार रेटिंग',tr:'Yıldız Puanı',th:'คะแนนดาว',vi:'Xếp Hạng Sao',id:'Peringkat Bintang',fil:'Star Rating',pt:'Classificação',bn:'স্টার রেটিং',ur:'ستارہ درجہ بندی',ms:'Penilaian Bintang'},
+  controls: {en:'Controls',ar:'التحكم',hi:'नियंत्रण',tr:'Kontroller',th:'การควบคุม',vi:'Điều Khiển',id:'Kontrol',fil:'Mga Kontrol',pt:'Controles',bn:'নিয়ন্ত্রণ',ur:'کنٹرولز',ms:'Kawalan'},
+  monsterCombat: {en:'Monster Combat',ar:'قتال الوحوش',hi:'राक्षस युद्ध',tr:'Canavar Savaşı',th:'ต่อสู้สัตว์ประหลาด',vi:'Chiến Đấu Quái Vật',id:'Pertarungan Monster',fil:'Labanan ng Monster',pt:'Combate de Monstros',bn:'দৈত্য যুদ্ধ',ur:'عفریت کی لڑائی',ms:'Pertempuran Raksasa'},
+  minimap: {en:'Minimap',ar:'الخريطة المصغرة',hi:'मिनीमैप',tr:'Mini Harita',th:'แผนที่ย่อ',vi:'Bản Đồ Thu Nhỏ',id:'Peta Mini',fil:'Mini Mapa',pt:'Minimapa',bn:'মিনিম্যাপ',ur:'چھوٹا نقشہ',ms:'Peta Mini'},
+  themes: {en:'10 Unique Themes',ar:'10 سمات فريدة',hi:'10 अनोखी थीम',tr:'10 Eşsiz Tema',th:'10 ธีมพิเศษ',vi:'10 Chủ Đề Độc Đáo',id:'10 Tema Unik',fil:'10 Natatanging Tema',pt:'10 Temas Únicos',bn:'১০টি অনন্য থিম',ur:'10 منفرد تھیمز',ms:'10 Tema Unik'},
+  loading: {en:'Loading...',ar:'جار التحميل...',hi:'लोड हो रहा...',tr:'Yükleniyor...',th:'กำลังโหลด...',vi:'Đang tải...',id:'Memuat...',fil:'Naglo-load...',pt:'Carregando...',bn:'লোড হচ্ছে...',ur:'لوڈ ہو رہا ہے...',ms:'Memuatkan...'},
+  beat: {en:'Beat',ar:'ضرب',hi:'मारो',tr:'Vur',th:'ตี',vi:'Đánh',id:'Pukul',fil:'Suntok',pt:'Bater',bn:'আঘাত',ur:'مارو',ms:'Pukul'},
+  jump: {en:'Jump',ar:'قفز',hi:'कूदो',tr:'Zıpla',th:'กระโดด',vi:'Nhảy',id:'Lompat',fil:'Talon',pt:'Pular',bn:'লাফ',ur:'چھلانگ',ms:'Lompat'},
+  run: {en:'Run',ar:'ركض',hi:'दौड़ो',tr:'Koş',th:'วิ่ง',vi:'Chạy',id:'Lari',fil:'Takbo',pt:'Correr',bn:'দৌড়াও',ur:'بھاگو',ms:'Lari'},
+  forest: {en:'Forest',ar:'غابة',hi:'जंगल',tr:'Orman',th:'ป่า',vi:'Rừng',id:'Hutan',fil:'Kagubatan',pt:'Floresta',bn:'বন',ur:'جنگل',ms:'Hutan'},
+  desert: {en:'Desert',ar:'صحراء',hi:'रेगिस्तान',tr:'Çöl',th:'ทะเลทราย',vi:'Sa Mạc',id:'Gurun',fil:'Disyerto',pt:'Deserto',bn:'মরুভূমি',ur:'صحرا',ms:'Padang Pasir'},
+  rainynight: {en:'Rainy Night',ar:'ليلة ممطرة',hi:'बरसात की रात',tr:'Yağmurlu Gece',th:'คืนฝนตก',vi:'Đêm Mưa',id:'Malam Hujan',fil:'Maulan Gabi',pt:'Noite Chuvosa',bn:'বৃষ্টির রাত',ur:'بارش کی رات',ms:'Malam Hujan'},
+  classroom: {en:'Classroom',ar:'فصل دراسي',hi:'कक्षा',tr:'Sınıf',th:'ห้องเรียน',vi:'Lớp Học',id:'Kelas',fil:'Silid-aralan',pt:'Sala de Aula',bn:'শ্রেণীকক্ষ',ur:'کلاس روم',ms:'Bilik Darjah'},
+  stadium: {en:'Stadium',ar:'ملعب',hi:'स्टेडियम',tr:'Stadyum',th:'สนามกีฬา',vi:'Sân Vận Động',id:'Stadion',fil:'Stadyum',pt:'Estádio',bn:'স্টেডিয়াম',ur:'اسٹیڈیم',ms:'Stadium'},
+  snow: {en:'Snow',ar:'ثلج',hi:'बर्फ',tr:'Kar',th:'หิมะ',vi:'Tuyết',id:'Salju',fil:'Niyebe',pt:'Neve',bn:'তুষার',ur:'برف',ms:'Salji'},
+  factory: {en:'Factory',ar:'مصنع',hi:'फ़ैक्ट्री',tr:'Fabrika',th:'โรงงาน',vi:'Nhà Máy',id:'Pabrik',fil:'Pabrika',pt:'Fábrica',bn:'কারখানা',ur:'فیکٹری',ms:'Kilang'},
+  beach: {en:'Beach',ar:'شاطئ',hi:'समुद्र तट',tr:'Plaj',th:'ชายหาด',vi:'Bãi Biển',id:'Pantai',fil:'Dalampasigan',pt:'Praia',bn:'সৈকত',ur:'ساحل',ms:'Pantai'},
+  underwater: {en:'Ocean',ar:'محيط',hi:'महासागर',tr:'Okyanus',th:'มหาสมุทร',vi:'Đại Dương',id:'Samudra',fil:'Karagatan',pt:'Oceano',bn:'মহাসাগর',ur:'سمندر',ms:'Lautan'},
+  city: {en:'City',ar:'مدينة',hi:'शहر',tr:'Şehir',th:'เมือง',vi:'Thành Phố',id:'Kota',fil:'Lungsod',pt:'Cidade',bn:'শহর',ur:'شہر',ms:'Bandar'},
+  helpFind: {en:'Navigate the 3D maze and reach the green beacon before countdown!',ar:'تنقل في المتاهة ثلاثية الأبعاد وصل إلى المنارة الخضراء!',hi:'3D भूलभुलैया में हरे बीकन तक पहुंचें!',tr:'3D labirentte yeşil işarete ulaş!',th:'นำทางในเขาวงกต 3D ไปยังสัญญาณสีเขียว!',vi:'Đi qua mê cung 3D đến đèn hiệu xanh!',id:'Navigasi labirin 3D menuju suar hijau!',fil:'Mag-navigate sa 3D maze papunta sa green beacon!',pt:'Navegue pelo labirinto 3D até o farol verde!',bn:'3D গোলকধাঁধায় সবুজ বীকনে পৌঁছান!',ur:'3D بھول بھلیاں میں سبز بیکن تک پہنچیں!',ms:'Navigasi maze 3D ke suar hijau!'},
+  helpFindTip: {en:'Full map shown for 2 sec at start. Memorize the path!',ar:'تظهر الخريطة كاملة لمدة ثانيتين. احفظ الطريق!',hi:'शुरुआत में 2 सेकंड पूरा नक्शा दिखता है।',tr:'Başlangıçta 2 sn harita gösterilir. Yolu ezberle!',th:'แผนที่แสดง 2 วิ ตอนเริ่ม จำเส้นทาง!',vi:'Bản đồ hiện 2 giây lúc đầu. Nhớ đường!',id:'Peta ditampilkan 2 detik di awal. Hafal jalannya!',fil:'Mapa ipinapakita 2 sec sa simula!',pt:'Mapa mostrado por 2s no início. Memorize!',bn:'শুরুতে ২ সেকেন্ড মানচিত্র দেখায়।',ur:'شروع میں 2 سیکنڈ نقشہ دکھایا جاتا ہے۔',ms:'Peta ditunjukkan 2 saat di awal.'},
+  helpStar3: {en:'⭐⭐⭐ = Sprint shortest path',ar:'⭐⭐⭐ = اركض أقصر طريق',hi:'⭐⭐⭐ = सबसे छोटा रास्ता दौड़ें',tr:'⭐⭐⭐ = En kısa yolda koş',th:'⭐⭐⭐ = วิ่งทางลัดที่สุด',vi:'⭐⭐⭐ = Chạy nước rút đường ngắn nhất',id:'⭐⭐⭐ = Sprint jalur terpendek',fil:'⭐⭐⭐ = Sprint pinakamaikling daan',pt:'⭐⭐⭐ = Sprint caminho mais curto',bn:'⭐⭐⭐ = সবচেয়ে ছোট পথে দৌড়ান',ur:'⭐⭐⭐ = مختصر ترین راستہ بھاگیں',ms:'⭐⭐⭐ = Lari laluan terpendek'},
+  helpStar2: {en:'⭐⭐ = Good time',ar:'⭐⭐ = وقت جيد',hi:'⭐⭐ = अच्छा समय',tr:'⭐⭐ = İyi süre',th:'⭐⭐ = เวลาดี',vi:'⭐⭐ = Thời gian tốt',id:'⭐⭐ = Waktu bagus',fil:'⭐⭐ = Magandang oras',pt:'⭐⭐ = Bom tempo',bn:'⭐⭐ = ভালো সময়',ur:'⭐⭐ = اچھا وقت',ms:'⭐⭐ = Masa yang baik'},
+  helpStar1: {en:'⭐ = Just finish before timeout',ar:'⭐ = أنهِ قبل انتهاء الوقت',hi:'⭐ = समय से पहले ख़त्म करें',tr:'⭐ = Süre dolmadan bitir',th:'⭐ = จบก่อนหมดเวลา',vi:'⭐ = Hoàn thành trước khi hết giờ',id:'⭐ = Selesai sebelum waktu habis',fil:'⭐ = Tapusin bago maubos oras',pt:'⭐ = Termine antes do tempo',bn:'⭐ = সময়ের আগে শেষ করুন',ur:'⭐ = وقت سے پہلے مکمل کریں',ms:'⭐ = Selesai sebelum masa tamat'},
+  helpStarTip: {en:'Hit monsters to GAIN bonus time!',ar:'اضرب الوحوش لكسب وقت إضافي!',hi:'राक्षसों को मारकर बोनस समय पाएं!',tr:'Canavarlara vur, bonus zaman kazan!',th:'ตีสัตว์ประหลาดเพื่อได้เวลาเพิ่ม!',vi:'Đánh quái vật để nhận thời gian thưởng!',id:'Pukul monster untuk mendapat bonus waktu!',fil:'Suntukin ang monster para sa bonus time!',pt:'Bata monstros para ganhar tempo bônus!',bn:'দৈত্যদের আঘাত করে বোনাস সময় পান!',ur:'عفریتوں کو مار کر بونس وقت حاصل کریں!',ms:'Pukul raksasa untuk masa bonus!'},
+  helpCtrlJoy: {en:'Left Joystick — Move',ar:'عصا يسار — تحرك',hi:'बायाँ जॉयस्टिक — चलें',tr:'Sol Joystick — Hareket',th:'จอยซ้าย — เดิน',vi:'Joystick trái — Di chuyển',id:'Joystick Kiri — Gerak',fil:'Kaliwa Joystick — Gumalaw',pt:'Joystick Esquerdo — Mover',bn:'বাম জয়স্টিক — চলুন',ur:'بائیں جوائے اسٹک — حرکت',ms:'Joystick Kiri — Gerak'},
+  helpCtrlSwipe: {en:'Swipe — Rotate camera',ar:'اسحب — تدوير الكاميرا',hi:'स्वाइप — कैमरा घुमाएं',tr:'Kaydır — Kamerayı döndür',th:'สไลด์ — หมุนกล้อง',vi:'Vuốt — Xoay camera',id:'Geser — Putar kamera',fil:'Swipe — Ikot camera',pt:'Deslize — Girar câmera',bn:'সোয়াইপ — ক্যামেরা ঘোরান',ur:'سوائپ — کیمرہ گھمائیں',ms:'Leret — Putar kamera'},
+  helpCtrlBeat: {en:'Beat — Punch monsters',ar:'ضرب — لكم الوحوش',hi:'मारो — राक्षसों को मुक्का',tr:'Vur — Canavarları yumrukla',th:'ตี — ต่อยสัตว์ประหลาด',vi:'Đánh — Đấm quái vật',id:'Pukul — Tinju monster',fil:'Suntok — Suntukin monster',pt:'Bater — Socar monstros',bn:'আঘাত — দৈত্যদের ঘুষি',ur:'مارو — عفریتوں کو مکا',ms:'Pukul — Tumbuk raksasa'},
+  helpCtrlJump: {en:'Jump — Jump over monsters',ar:'قفز — اقفز فوق الوحوش',hi:'कूदो — राक्षसों के ऊपर कूदें',tr:'Zıpla — Canavarların üstünden atla',th:'กระโดด — กระโดดข้ามสัตว์ประหลาด',vi:'Nhảy — Nhảy qua quái vật',id:'Lompat — Lompati monster',fil:'Talon — Tumalon sa monster',pt:'Pular — Pule sobre monstros',bn:'লাফ — দৈত্যদের উপর দিয়ে লাফান',ur:'چھلانگ — عفریتوں کے اوپر سے کودیں',ms:'Lompat — Lompat atas raksasa'},
+  helpCtrlRun: {en:'Run — Sprint (tap = 2s boost)',ar:'ركض — عدو سريع (اضغط = 2 ثانية)',hi:'दौड़ो — तेज दौड़ (टैप = 2 सेकंड)',tr:'Koş — Sprint (dokun = 2sn hız)',th:'วิ่ง — สปรินท์ (แตะ = 2 วิ)',vi:'Chạy — Chạy nước rút (chạm = 2 giây)',id:'Lari — Sprint (ketuk = 2 detik)',fil:'Takbo — Sprint (tap = 2s)',pt:'Correr — Sprint (toque = 2s)',bn:'দৌড়াও — স্প্রিন্ট (ট্যাপ = ২ সেকেন্ড)',ur:'بھاگو — تیز دوڑ (ٹیپ = 2 سیکنڈ)',ms:'Lari — Sprint (ketuk = 2s)'},
+  helpMonsterHit: {en:'Monster hits you → Lose time!',ar:'الوحش يضربك ← تخسر وقتاً!',hi:'राक्षस मारे → समय खोएं!',tr:'Canavar vurursa → Zaman kaybedersin!',th:'สัตว์ประหลาดตี → เสียเวลา!',vi:'Quái vật đánh bạn → Mất thời gian!',id:'Monster menyerang → Kehilangan waktu!',fil:'Monster tumama → Mawalan ng oras!',pt:'Monstro te ataca → Perde tempo!',bn:'দৈত্য আঘাত → সময় হারান!',ur:'عفریت مارے → وقت ضائع!',ms:'Raksasa serang → Hilang masa!'},
+  helpMonsterBeat: {en:'You hit monster → Gain time!',ar:'تضرب الوحش ← تكسب وقتاً!',hi:'राक्षस मारो → समय पाएं!',tr:'Canavara vur → Zaman kazan!',th:'ตีสัตว์ประหลาด → ได้เวลา!',vi:'Đánh quái vật → Được thời gian!',id:'Pukul monster → Dapat waktu!',fil:'Suntukin monster → Kumuha ng oras!',pt:'Bata monstro → Ganha tempo!',bn:'দৈত্য মারুন → সময় পান!',ur:'عفریت مارو → وقت حاصل!',ms:'Pukul raksasa → Dapat masa!'},
+  helpMonsterJump: {en:'Jump over → Safe!',ar:'اقفز فوقه ← آمن!',hi:'ऊपर कूदो → सुरक्षित!',tr:'Üstünden atla → Güvenli!',th:'กระโดดข้าม → ปลอดภัย!',vi:'Nhảy qua → An toàn!',id:'Lompati → Aman!',fil:'Tumalon → Ligtas!',pt:'Pule por cima → Seguro!',bn:'উপর দিয়ে লাফান → নিরাপদ!',ur:'اوپر سے کودیں → محفوظ!',ms:'Lompat atas → Selamat!'},
+  helpMonsterCombo: {en:'3× quick Beat = Sweep Kick combo!',ar:'3× ضربات سريعة = ركلة كاسحة!',hi:'3× तेज मारो = स्वीप किक कॉम्बो!',tr:'3× hızlı vur = Süpürme tekme!',th:'ตีเร็ว 3× = คอมโบเตะกวาด!',vi:'3× đánh nhanh = Combo quét!',id:'3× pukul cepat = Combo sapu!',fil:'3× mabilis suntok = Sweep Kick!',pt:'3× soco rápido = Combo chute!',bn:'3× দ্রুত আঘাত = সুইপ কিক!',ur:'3× تیز مارو = سویپ کِک!',ms:'3× pukul laju = Kombo tendangan!'},
+  helpMapYellow: {en:'Yellow = Your position',ar:'أصفر = موقعك',hi:'पीला = आपकी स्थिति',tr:'Sarı = Konumun',th:'เหลือง = ตำแหน่งคุณ',vi:'Vàng = Vị trí bạn',id:'Kuning = Posisi kamu',fil:'Dilaw = Posisyon mo',pt:'Amarelo = Sua posição',bn:'হলুদ = আপনার অবস্থান',ur:'پیلا = آپ کی پوزیشن',ms:'Kuning = Kedudukan anda'},
+  helpMapGreen: {en:'Green = Goal (always visible)',ar:'أخضر = الهدف (مرئي دائماً)',hi:'हरा = लक्ष्य (हमेशा दिखता)',tr:'Yeşil = Hedef (her zaman görünür)',th:'เขียว = เป้าหมาย (มองเห็นเสมอ)',vi:'Xanh = Mục tiêu (luôn hiện)',id:'Hijau = Tujuan (selalu terlihat)',fil:'Berde = Goal (laging nakikita)',pt:'Verde = Meta (sempre visível)',bn:'সবুজ = লক্ষ্য (সর্বদা দৃশ্যমান)',ur:'سبز = ہدف (ہمیشہ نظر آتا ہے)',ms:'Hijau = Matlamat (sentiasa kelihatan)'},
+  helpMapFog: {en:'Dark = Unexplored (fog of war)',ar:'مظلم = غير مستكشف',hi:'अंधेरा = अज्ञात (युद्ध कोहरा)',tr:'Karanlık = Keşfedilmemiş',th:'มืด = ยังไม่สำรวจ (หมอกสงคราม)',vi:'Tối = Chưa khám phá',id:'Gelap = Belum dijelajahi',fil:'Madilim = Hindi pa na-explore',pt:'Escuro = Inexplorado',bn:'অন্ধকার = অনাবিষ্কৃত',ur:'اندھیرا = غیر دریافت شدہ',ms:'Gelap = Belum diterokai'},
+  helpThemes: {en:'Progress through levels to unlock new themed worlds!',ar:'تقدم في المستويات لفتح عوالم جديدة!',hi:'नई दुनिया अनलॉक करने के लिए आगे बढ़ें!',tr:'Yeni temaları açmak için ilerle!',th:'ผ่านด่านเพื่อปลดล็อกธีมใหม่!',vi:'Tiến qua các màn để mở khóa thế giới mới!',id:'Maju untuk membuka dunia baru!',fil:'Sumulong para mag-unlock ng bagong mundo!',pt:'Avance para desbloquear novos mundos!',bn:'নতুন থিম আনলক করতে এগিয়ে যান!',ur:'نئی دنیائیں کھولنے کے لیے آگے بڑھیں!',ms:'Maju untuk buka dunia baharu!'}
+};
+
+let currentLang = localStorage.getItem('maze3d_lang') || 'en';
+function t(key){ return (I18N[key] && I18N[key][currentLang]) || (I18N[key] && I18N[key]['en']) || key; }
+function setLang(lang){
+  currentLang = lang;
+  localStorage.setItem('maze3d_lang', lang);
+  document.documentElement.dir = LANGS[lang].dir;
+  updateAllText();
+}
+function updateAllText(){
+  // Home screen
+  const h1 = document.querySelector('#level-screen h1');
+  if(h1) h1.textContent = t('title');
+  const sub = document.querySelector('#level-screen .subtitle');
+  if(sub) sub.textContent = t('subtitle');
+  // How to play modal
+  const howH2 = document.querySelector('#how-modal .how-header h2');
+  if(howH2) howH2.textContent = t('howToPlay');
+  const gotItBtn = document.querySelector('#how-modal .btn-primary');
+  if(gotItBtn) gotItBtn.textContent = t('gotIt');
+  // How card titles
+  const howCardTitles = document.querySelectorAll('#how-modal .how-card-title');
+  const titleKeys = ['findExit','starRating','controls','monsterCombat','minimap','themes'];
+  howCardTitles.forEach((el, i) => { if(titleKeys[i]) el.textContent = t(titleKeys[i]); });
+  // How-to-play card descriptions
+  const hfd = document.getElementById('help-find-desc');
+  if(hfd) hfd.innerHTML = t('helpFind');
+  const hft = document.getElementById('help-find-tip');
+  if(hft) hft.textContent = t('helpFindTip');
+  const hsd = document.getElementById('help-star-desc');
+  if(hsd) hsd.innerHTML = `${t('helpStar3')}<br>${t('helpStar2')}<br>${t('helpStar1')}`;
+  const hst = document.getElementById('help-star-tip');
+  if(hst) hst.textContent = t('helpStarTip');
+  const hcd = document.getElementById('help-ctrl-desc');
+  if(hcd) hcd.innerHTML = `<b>${t('helpCtrlJoy')}</b><br><b>${t('helpCtrlSwipe')}</b><br><b>${t('helpCtrlBeat')}</b><br><b>${t('helpCtrlJump')}</b><br><b>${t('helpCtrlRun')}</b>`;
+  const hmd = document.getElementById('help-monster-desc');
+  if(hmd) hmd.innerHTML = `<span style="color:#ff6666">${t('helpMonsterHit')}</span><br><span style="color:#66ff66">${t('helpMonsterBeat')}</span><br><span style="color:#66ccff">${t('helpMonsterJump')}</span><br><span style="opacity:.7;font-size:.65rem">${t('helpMonsterCombo')}</span>`;
+  const hmpd = document.getElementById('help-map-desc');
+  if(hmpd) hmpd.innerHTML = `<span style="color:#ffff00">● ${t('helpMapYellow')}</span><br><span style="color:#00ff88">● ${t('helpMapGreen')}</span><br><span style="opacity:.7;font-size:.65rem">${t('helpMapFog')}</span>`;
+  const htd = document.getElementById('help-theme-desc');
+  if(htd) htd.textContent = t('helpThemes');
+  // Result modal
+  const btnNext = document.getElementById('btn-next');
+  if(btnNext) btnNext.textContent = t('nextLevel');
+  const retryBtns = document.querySelectorAll('#result-modal .result-bottom .btn-secondary');
+  if(retryBtns[0]) retryBtns[0].textContent = t('retry');
+  if(retryBtns[1]) retryBtns[1].textContent = t('home');
+  // Fail modal
+  const failH2 = document.querySelector('#fail-modal .result-top h2');
+  if(failH2) failH2.textContent = t('timesUp');
+  const failInfo = document.querySelector('#fail-modal .result-top .info');
+  if(failInfo) failInfo.textContent = t('timesUpSub');
+  const failRetry = document.querySelector('#fail-modal .result-bottom .btn-danger');
+  if(failRetry) failRetry.textContent = t('retry');
+  const failHome = document.querySelector('#fail-modal .result-bottom .btn-secondary');
+  if(failHome) failHome.textContent = t('home');
+  // Action button labels
+  const lr = document.getElementById('label-run');
+  const lj = document.getElementById('label-jump');
+  const lb = document.getElementById('label-beat');
+  if(lr) lr.textContent = t('run');
+  if(lj) lj.textContent = t('jump');
+  if(lb) lb.textContent = t('beat');
+  // Level label (if in game)
+  const ll = document.getElementById('level-label');
+  if(ll && typeof currentLevel !== 'undefined' && LEVELS[currentLevel]){
+    ll.textContent = `${t('level')} ${currentLevel+1} · ${t(LEVELS[currentLevel].skin)}`;
+  }
+  // Re-render level select if visible (updates theme names)
+  if(!document.getElementById('level-screen').classList.contains('hidden')){
+    renderLevelSelect();
+  }
+}
+
+window.showLangPicker = function(){
+  const existing = document.getElementById('lang-picker');
+  if(existing){ existing.remove(); return; }
+  const picker = document.createElement('div');
+  picker.id = 'lang-picker';
+  picker.style.cssText = 'position:absolute;top:44px;right:12px;z-index:300;background:rgba(20,20,40,.95);border:1px solid rgba(255,255,255,.2);border-radius:12px;padding:8px;display:flex;flex-wrap:wrap;gap:4px;max-width:200px';
+  for(const [code, info] of Object.entries(LANGS)){
+    const btn = document.createElement('button');
+    btn.textContent = info.name;
+    btn.style.cssText = 'padding:4px 8px;border:1px solid rgba(255,255,255,' + (code===currentLang?'.6':'.2') + ');border-radius:6px;background:' + (code===currentLang?'rgba(255,215,0,.2)':'rgba(255,255,255,.05)') + ';color:#fff;font-size:.6rem;cursor:pointer';
+    btn.onclick = ()=>{ setLang(code); picker.remove(); };
+    picker.appendChild(btn);
+  }
+  document.getElementById('game-root').appendChild(picker);
+};
+
+// ===== LEVEL CONFIG =====
+// Generate 100 levels: 10 themes × 10 levels each
+// Formula: size grows from 5 to 30, times scale with maze path length
+const THEME_ORDER = ['forest','desert','rainynight','classroom','stadium','snow','factory','beach','underwater','city'];
+const LEVELS = [];
+for(let i = 0; i < 100; i++){
+  const theme = THEME_ORDER[Math.floor(i/10)];
+  const inChapter = i % 10; // 0-9 within chapter
+  const globalDifficulty = i;
+  // Size: starts at 5, grows to ~30 at level 100
+  const size = Math.min(30, 5 + Math.floor(globalDifficulty * 0.26));
+  // Shortest path estimate: size * 1.8 cells, 0.6s per cell at run speed
+  const minRunTime = Math.ceil(size * 1.8 * 0.6);
+  const star3 = minRunTime + 10 + Math.floor(inChapter * 1.5);
+  const star2 = Math.ceil(star3 * 1.8);
+  const time = Math.ceil(star2 * 1.8);
+  LEVELS.push({size, time, star3, star2, skin: theme});
+}
+
+const CELL_SIZE = 5;
+const WALL_HEIGHT = 4.5;
+const WALL_THICK = 0.5;
+const FOG_RADIUS = 2;
+const CAM_DIST = 3.5;
+const CAM_MIN_DIST = 0.8;
+
+// ===== PROGRESS =====
+let progress = loadProgress() || { levels: LEVELS.map(()=>({stars:0})) };
+// Expand progress if levels were added
+while(progress.levels.length < LEVELS.length) progress.levels.push({stars:0});
+
+function saveProgress(){ localStorage.setItem('maze3d_progress', JSON.stringify(progress)); }
+function loadProgress(){ return JSON.parse(localStorage.getItem('maze3d_progress')||'null'); }
+
+const DEV_MODE = false; // Set to true for testing (unlocks all levels)
+
+function isLevelUnlocked(idx){
+  if(DEV_MODE) return true;
+  if(idx === 0) return true;
+  return progress.levels[idx-1].stars > 0;
+}
+
+// ===== STATE =====
+let scene, camera, renderer, clock, raycaster;
+let currentLevel = 0;
+let maze = [];
+let walls = [];
+let wallMeshes = [];
+let goalMesh, goalRing;
+let charGroup;
+let gameRunning = false;
+let gameEnded = false; // blocks all animation changes after win/fail
+let startTime = 0, elapsed = 0, timerInterval;
+let animTime = 0;
+let torchLights = [];
+
+// Monsters
+let monsters = [];
+let coins = [];
+let hurtAnims = ['Face_Punch_Reaction_1'];
+
+// Player
+let moveDir = {x:0, z:0};
+let isRunning = false;
+let isPunching = false;
+let punchTimer = 0;
+let playerVelocity = new THREE.Vector3();
+let playerOnGround = true;
+
+// Camera
+let camYaw = 0;
+let camPitch = 0.3;
+
+// Fog of war
+let visitedCells = new Set();
+
+// ===== VIEWPORT =====
+function getW(){ return Math.max(window.innerWidth, window.innerHeight); }
+function getH(){ return Math.min(window.innerWidth, window.innerHeight); }
+function isRotated(){ return window.innerHeight > window.innerWidth; }
+
+function transformTouch(clientX, clientY){
+  if(isRotated()) return { x: clientY, y: window.innerWidth - clientX };
+  return { x: clientX, y: clientY };
+}
+function transformDelta(dx, dy){
+  if(isRotated()) return { dx: dy, dy: -dx };
+  return { dx, dy };
+}
+
+// ===== LEVEL SELECT SCREEN =====
+function renderLevelSelect(){
+  const container = document.getElementById('level-path');
+  const totalLevels = LEVELS.length;
+  // Horizontal scrollable: 70px per level node
+  const spacing = 68;
+  const pathW = totalLevels * spacing + 80;
+  const pathH = 200;
+  
+  // Node positions: evenly spaced left-to-right with larger sine wave
+  const positions = [];
+  const margin = 40;
+  for(let i = 0; i < totalLevels; i++){
+    const x = margin + spacing * i;
+    const y = pathH/2 - 26 + Math.sin(i * 0.65) * 55; // bigger wave amplitude
+    positions.push({x, y});
+  }
+  
+  // Draw connecting path (SVG curved line)
+  let pathD = `M ${positions[0].x+26} ${positions[0].y+26}`;
+  for(let i = 1; i < positions.length; i++){
+    const prev = positions[i-1], curr = positions[i];
+    const cpx = (prev.x + curr.x)/2 + 26;
+    const cpy1 = prev.y + 26, cpy2 = curr.y + 26;
+    pathD += ` Q ${cpx} ${(cpy1+cpy2)/2 + (i%2?-10:10)}, ${curr.x+26} ${curr.y+26}`;
+  }
+  
+  // Wrap in inner div for scroll
+  let html = `<div style="position:relative;width:${pathW}px;height:${pathH}px;min-width:${pathW}px">`;
+  html += `<svg class="path-line" width="${pathW}" height="${pathH}">
+    <path d="${pathD}" fill="none" stroke="rgba(255,255,255,0.12)" stroke-width="4" stroke-dasharray="8,5"/>
+    <path d="${pathD}" fill="none" stroke="rgba(255,255,255,0.06)" stroke-width="8"/>
+  </svg>`;
+  
+  // Chapter tags
+  const chapterInfo = [
+    {name:'FOREST',cls:'forest',idx:0},
+    {name:'DESERT',cls:'desert',idx:10},
+    {name:'RAINY NIGHT',cls:'rainynight',idx:20},
+    {name:'CLASS',cls:'classroom',idx:30},
+    {name:'STADIUM',cls:'stadium',idx:40},
+    {name:'SNOW',cls:'snow',idx:50},
+    {name:'FACTORY',cls:'factory',idx:60},
+    {name:'BEACH',cls:'beach',idx:70},
+    {name:'OCEAN',cls:'underwater',idx:80},
+    {name:'CITY',cls:'city',idx:90}
+  ];
+  for(const ch of chapterInfo){
+    const p = positions[ch.idx];
+    // Position preview below or above depending on wave position
+    const isAbove = p.y > pathH/2;
+    const previewY = isAbove ? Math.max(0, p.y - 55) : p.y + 58;
+    html += `<span class="chapter-tag ${ch.cls}" style="left:${p.x}px;top:${Math.max(0,p.y-20)}px">${t(ch.cls)}</span>`;
+    // Theme icon (small emoji)
+    const themeIcons = {forest:'🌲',desert:'🏜️',rainynight:'🌃',classroom:'📚',stadium:'⚽',snow:'❄️',factory:'🏭',beach:'🏖️',underwater:'🐠',city:'🏙️'};
+    const icon = themeIcons[ch.cls] || '🎮';
+    html += `<span style="position:absolute;left:${p.x+16}px;top:${previewY}px;font-size:1.2rem;pointer-events:none">${icon}</span>`;
+  }
+  
+  // Level nodes
+  for(let i = 0; i < totalLevels; i++){
+    const p = positions[i];
+    const unlocked = isLevelUnlocked(i);
+    const stars = progress.levels[i].stars;
+    const isCurrent = unlocked && (i === 0 || progress.levels[i].stars === 0) && (i === 0 || progress.levels[i-1].stars > 0);
+    
+    let cls = 'level-node';
+    if(!unlocked) cls += ' locked';
+    else if(stars > 0) cls += ' completed';
+    if(isCurrent) cls += ' current';
+    
+    let content = '';
+    if(!unlocked){
+      content = `${i+1}<span class="lock">🔒</span>`;
+    } else {
+      content = `${i+1}`;
+      if(stars > 0) content += `<span class="node-stars">${'⭐'.repeat(stars)}</span>`;
+      else content += `<span class="node-stars">☆☆☆</span>`;
+    }
+    
+    html += `<div class="${cls}" style="left:${p.x}px;top:${p.y}px" onclick="selectLevel(${i})">${content}</div>`;
+  }
+  
+  html += '</div>'; // close inner scroll div
+  container.innerHTML = html;
+  
+  // Auto-scroll to current level
+  const currentIdx = progress.levels.findIndex((l,i)=> isLevelUnlocked(i) && l.stars === 0);
+  if(currentIdx > 5){
+    container.scrollLeft = (currentIdx - 3) * spacing;
+  }
+  
+  // Manual touch scroll (CSS transform rotation breaks native scroll)
+  let scrollTouchId = null, scrollStartX = 0, scrollStartLeft = 0;
+  container.addEventListener('touchstart', (e)=>{
+    const t = e.touches[0];
+    scrollTouchId = t.identifier;
+    // Use transformTouch to get correct axis
+    const tp = transformTouch(t.clientX, t.clientY);
+    scrollStartX = tp.x;
+    scrollStartLeft = container.scrollLeft;
+  }, {passive:true});
+  container.addEventListener('touchmove', (e)=>{
+    if(scrollTouchId === null) return;
+    for(let i=0;i<e.touches.length;i++){
+      if(e.touches[i].identifier === scrollTouchId){
+        const tp = transformTouch(e.touches[i].clientX, e.touches[i].clientY);
+        const dx = tp.x - scrollStartX;
+        container.scrollLeft = scrollStartLeft - dx;
+        break;
+      }
+    }
+  }, {passive:true});
+  container.addEventListener('touchend', (e)=>{
+    for(let i=0;i<e.changedTouches.length;i++){
+      if(e.changedTouches[i].identifier === scrollTouchId){
+        scrollTouchId = null; break;
+      }
+    }
+  }, {passive:true});
+}
+function createWallTexture(skin){
+  const c = document.createElement('canvas');
+  c.width = 256; c.height = 256;
+  const ctx = c.getContext('2d');
+
+  if(skin === 'forest'){
+    // Mossy stone
+    ctx.fillStyle = '#7a9a6a';
+    ctx.fillRect(0,0,256,256);
+    // Stone blocks
+    const rows = 6, cols = 4;
+    const bh = 256/rows;
+    for(let r=0;r<rows;r++){
+      const off = (r%2) * (256/cols/2);
+      for(let col=0;col<cols+1;col++){
+        const bx = col*(256/cols) + off;
+        const by = r*bh;
+        const bw = 256/cols;
+        // Block fill with variation
+        const v = Math.random()*20-10;
+        ctx.fillStyle = `rgb(${122+v},${154+v},${106+v})`;
+        ctx.fillRect(bx+2, by+2, bw-4, bh-4);
+      }
+      // Mortar lines
+      ctx.strokeStyle = '#4a6a3a';
+      ctx.lineWidth = 3;
+      ctx.beginPath(); ctx.moveTo(0, r*bh); ctx.lineTo(256, r*bh); ctx.stroke();
+      for(let col=0;col<cols+1;col++){
+        const bx = col*(256/cols) + off;
+        ctx.beginPath(); ctx.moveTo(bx, r*bh); ctx.lineTo(bx, (r+1)*bh); ctx.stroke();
+      }
+    }
+    // Moss spots
+    for(let i=0;i<80;i++){
+      ctx.fillStyle = `rgba(${50+Math.random()*40},${140+Math.random()*60},${30+Math.random()*30},${0.2+Math.random()*0.3})`;
+      const mx = Math.random()*256, my = Math.random()*256;
+      ctx.beginPath(); ctx.arc(mx,my,2+Math.random()*5,0,Math.PI*2); ctx.fill();
+    }
+    // Surface noise
+    for(let i=0;i<300;i++){
+      ctx.fillStyle = `rgba(${60+Math.random()*60},${80+Math.random()*60},${40+Math.random()*40},0.1)`;
+      ctx.fillRect(Math.random()*256,Math.random()*256, 1+Math.random()*3, 1+Math.random()*3);
+    }
+    // Cracks
+    for(let i=0;i<4;i++){
+      ctx.strokeStyle = 'rgba(40,60,30,0.4)';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      let cx = Math.random()*256, cy = Math.random()*256;
+      ctx.moveTo(cx,cy);
+      for(let s=0;s<5;s++){
+        cx += Math.random()*20-10;
+        cy += Math.random()*15+5;
+        ctx.lineTo(cx,cy);
+      }
+      ctx.stroke();
+    }
+  } else if(skin === 'factory'){
+    // Bright factory wall with machines and equipment
+    ctx.fillStyle = '#c8ccd0';
+    ctx.fillRect(0,0,256,256);
+    // Metal panel seams
+    ctx.strokeStyle = '#9a9ea4'; ctx.lineWidth = 2;
+    ctx.strokeRect(5,5,120,120);ctx.strokeRect(130,5,120,120);
+    ctx.strokeRect(5,130,120,120);ctx.strokeRect(130,130,120,120);
+    // Rivets
+    ctx.fillStyle = '#888c90';
+    for(let x=5;x<=250;x+=30){ctx.beginPath();ctx.arc(x,5,3,0,Math.PI*2);ctx.fill();}
+    for(let x=5;x<=250;x+=30){ctx.beginPath();ctx.arc(x,128,3,0,Math.PI*2);ctx.fill();}
+    // Gear icon
+    ctx.strokeStyle='#606870';ctx.lineWidth=3;
+    ctx.beginPath();ctx.arc(60,60,25,0,Math.PI*2);ctx.stroke();
+    ctx.beginPath();ctx.arc(60,60,12,0,Math.PI*2);ctx.stroke();
+    for(let a=0;a<8;a++){const ang=a*Math.PI/4;ctx.fillStyle='#606870';ctx.fillRect(60+Math.cos(ang)*22-3,60+Math.sin(ang)*22-3,6,6);}
+    // Pipes
+    ctx.fillStyle='#70a0c0';ctx.fillRect(150,30,12,80);ctx.fillRect(200,50,12,60);
+    ctx.fillStyle='#5080a0';ctx.beginPath();ctx.arc(156,30,8,0,Math.PI*2);ctx.fill();
+    ctx.beginPath();ctx.arc(206,50,8,0,Math.PI*2);ctx.fill();
+    // Valve
+    ctx.strokeStyle='#cc4444';ctx.lineWidth=3;
+    ctx.beginPath();ctx.arc(60,190,15,0,Math.PI*2);ctx.stroke();
+    ctx.beginPath();ctx.moveTo(45,190);ctx.lineTo(75,190);ctx.stroke();
+    ctx.beginPath();ctx.moveTo(60,175);ctx.lineTo(60,205);ctx.stroke();
+    // Gauge
+    ctx.fillStyle='#e8e4d8';ctx.beginPath();ctx.arc(190,190,18,0,Math.PI*2);ctx.fill();
+    ctx.strokeStyle='#333';ctx.lineWidth=2;ctx.beginPath();ctx.arc(190,190,18,0,Math.PI*2);ctx.stroke();
+    ctx.strokeStyle='#cc2222';ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(190,190);ctx.lineTo(200,180);ctx.stroke();
+    // Warning stripes
+    ctx.fillStyle='#f0c020';ctx.fillRect(0,240,256,16);
+    ctx.fillStyle='#222';
+    for(let x=0;x<256;x+=20){ctx.beginPath();ctx.moveTo(x,240);ctx.lineTo(x+10,256);ctx.lineTo(x+20,240);ctx.fill();}
+  } else if(skin === 'beach'){
+    // Beach: warm sand with colorful umbrellas and palm
+    ctx.fillStyle = '#f0e4b8';
+    ctx.fillRect(0,0,256,256);
+    // Sandy variation
+    for(let i=0;i<150;i++){
+      ctx.fillStyle = `rgba(${220+Math.random()*35},${190+Math.random()*40},${130+Math.random()*40},0.12)`;
+      ctx.fillRect(Math.random()*256,Math.random()*256, 2+Math.random()*5, 2+Math.random()*5);
+    }
+    // Palm tree trunk
+    ctx.fillStyle = '#7a5a30';
+    ctx.fillRect(20, 50, 22, 200);
+    ctx.strokeStyle = '#5a4020';ctx.lineWidth = 2;
+    for(let y=60;y<240;y+=14){ctx.beginPath();ctx.moveTo(20,y);ctx.lineTo(42,y);ctx.stroke();}
+    // Palm leaves
+    ctx.fillStyle = '#3a9a30';
+    ctx.beginPath();ctx.ellipse(31,48,28,10,0.3,0,Math.PI*2);ctx.fill();
+    ctx.beginPath();ctx.ellipse(31,42,22,8,-0.5,0,Math.PI*2);ctx.fill();
+    // Colorful umbrellas
+    const cols = ['#ff4466','#ffaa22','#44aaff','#ff66cc','#44dd44'];
+    for(let i=0;i<3;i++){
+      const ux=80+i*55, uy=90+Math.random()*50;
+      ctx.fillStyle=cols[Math.floor(Math.random()*cols.length)];
+      ctx.beginPath();ctx.arc(ux,uy,16,Math.PI,0);ctx.fill();
+      // Stripe
+      ctx.fillStyle='rgba(255,255,255,0.3)';
+      ctx.beginPath();ctx.arc(ux,uy,16,Math.PI+0.5,Math.PI+1.2);ctx.lineTo(ux,uy);ctx.fill();
+      ctx.fillStyle='#8a6a40';ctx.fillRect(ux-1.5,uy,3,35);
+    }
+    // Blue wave at bottom
+    ctx.fillStyle='rgba(40,160,220,0.25)';
+    ctx.beginPath();ctx.moveTo(0,238);
+    for(let x=0;x<=256;x+=20)ctx.quadraticCurveTo(x+10,233+Math.random()*8,x+20,238);
+    ctx.lineTo(256,256);ctx.lineTo(0,256);ctx.fill();
+  } else if(skin === 'classroom'){
+    // School white walls with chalkboard and baseboard
+    ctx.fillStyle = '#f4f0e8';
+    ctx.fillRect(0,0,256,256);
+    // Slight plaster texture
+    for(let i=0;i<100;i++){
+      ctx.fillStyle = `rgba(200,195,185,${0.08+Math.random()*0.08})`;
+      ctx.fillRect(Math.random()*256,Math.random()*256, 3+Math.random()*8, 3+Math.random()*8);
+    }
+    // Green chalkboard in middle
+    ctx.fillStyle = '#2a5a2a';
+    ctx.fillRect(10, 80, 236, 80);
+    ctx.strokeStyle = '#c8a050';ctx.lineWidth = 3;
+    ctx.strokeRect(10, 80, 236, 80);
+    // Chalk marks
+    ctx.strokeStyle = 'rgba(255,255,255,0.4)';ctx.lineWidth = 1.5;
+    for(let i=0;i<6;i++){
+      ctx.beginPath();ctx.moveTo(20+Math.random()*200, 90+Math.random()*60);
+      ctx.lineTo(40+Math.random()*180, 90+Math.random()*60);ctx.stroke();
+    }
+    // Bottom baseboard (brown wood)
+    ctx.fillStyle = '#8a7050';
+    ctx.fillRect(0, 230, 256, 26);
+    // Top trim
+    ctx.fillStyle = '#d0c8b0';
+    ctx.fillRect(0, 0, 256, 8);
+  } else if(skin === 'city'){
+    // Bright sunny city buildings
+    ctx.fillStyle = '#88c8f0'; // bright sky blue background
+    ctx.fillRect(0,0,256,256);
+    // Colorful skyscrapers
+    const buildingColors = ['#e8e0d0','#d0c8b8','#c8e0f0','#f0e8c8','#e0d0c0','#d8e8d8','#f0d8d0'];
+    for(let i=0;i<7;i++){
+      const bx = i*37+2, bw = 28+Math.random()*12, bh = 100+Math.random()*120;
+      const by = 256-bh;
+      ctx.fillStyle = buildingColors[i % buildingColors.length];
+      ctx.fillRect(bx,by,bw,bh);
+      // Colored windows (blue glass reflections)
+      for(let wy=by+8;wy<256-8;wy+=12){
+        for(let wx=bx+3;wx<bx+bw-5;wx+=7){
+          if(Math.random()>0.2){
+            ctx.fillStyle = Math.random()>0.5 ? `rgba(100,180,240,${0.4+Math.random()*0.4})` : `rgba(255,240,180,${0.3+Math.random()*0.3})`;
+            ctx.fillRect(wx,wy,4,5);
+          }
+        }
+      }
+      // Building edge highlight (sun)
+      ctx.fillStyle = 'rgba(255,255,220,0.15)';
+      ctx.fillRect(bx,by,3,bh);
+    }
+    // Ferris wheel (colorful)
+    ctx.strokeStyle='#e04080';ctx.lineWidth=2.5;
+    ctx.beginPath();ctx.arc(210,60,30,0,Math.PI*2);ctx.stroke();
+    const wheelColors = ['#ff4060','#40c0ff','#ffcc00','#40dd60','#ff8800','#cc44ff','#ff6688','#44dddd'];
+    for(let a=0;a<8;a++){
+      const angle=a*Math.PI/4;
+      ctx.strokeStyle=wheelColors[a];ctx.lineWidth=1.5;
+      ctx.beginPath();ctx.moveTo(210,60);ctx.lineTo(210+Math.cos(angle)*30,60+Math.sin(angle)*30);ctx.stroke();
+      // Gondola
+      ctx.fillStyle=wheelColors[a];
+      ctx.beginPath();ctx.arc(210+Math.cos(angle)*30,60+Math.sin(angle)*30,4,0,Math.PI*2);ctx.fill();
+    }
+    // Sun glow in corner
+    ctx.fillStyle='rgba(255,240,100,0.2)';
+    ctx.beginPath();ctx.arc(30,30,40,0,Math.PI*2);ctx.fill();
+    ctx.fillStyle='rgba(255,255,200,0.4)';
+    ctx.beginPath();ctx.arc(30,30,18,0,Math.PI*2);ctx.fill();
+  } else { // rainynight (default/dungeon)
+    // Dark stone
+    ctx.fillStyle = '#4a4a5a';
+    ctx.fillRect(0,0,256,256);
+    // Irregular blocks
+    const rows = 5, cols = 4;
+    const bh = 256/rows;
+    for(let r=0;r<rows;r++){
+      const off = (r%2)*30 + Math.random()*10;
+      for(let col=0;col<cols+1;col++){
+        const bx = col*(256/cols) + off;
+        const by = r*bh + Math.random()*4;
+        const bw = 256/cols + Math.random()*10-5;
+        const v = Math.random()*20-10;
+        ctx.fillStyle = `rgb(${74+v},${74+v},${90+v})`;
+        ctx.fillRect(bx+2, by+2, bw-4, bh-4);
+      }
+      // Dark mortar
+      ctx.strokeStyle = '#2a2a3a';
+      ctx.lineWidth = 3;
+      ctx.beginPath(); ctx.moveTo(0, r*bh); ctx.lineTo(256, r*bh); ctx.stroke();
+      for(let col=0;col<cols+1;col++){
+        const bx = col*(256/cols) + off;
+        ctx.beginPath(); ctx.moveTo(bx, r*bh); ctx.lineTo(bx, (r+1)*bh); ctx.stroke();
+      }
+    }
+    // Dripping stains
+    for(let i=0;i<12;i++){
+      ctx.strokeStyle = `rgba(20,20,30,${0.3+Math.random()*0.3})`;
+      ctx.lineWidth = 2+Math.random()*3;
+      ctx.beginPath();
+      const sx = Math.random()*256;
+      ctx.moveTo(sx, 0);
+      ctx.lineTo(sx + Math.random()*10-5, 50+Math.random()*100);
+      ctx.stroke();
+    }
+    // Roughness
+    for(let i=0;i<400;i++){
+      ctx.fillStyle = `rgba(${30+Math.random()*40},${30+Math.random()*40},${40+Math.random()*40},0.15)`;
+      ctx.fillRect(Math.random()*256,Math.random()*256, 1+Math.random()*2, 1+Math.random()*2);
+    }
+  }
+  return c;
+}
+
+function createFloorTexture(skin){
+  const c = document.createElement('canvas');
+  c.width = 128; c.height = 128;
+  const ctx = c.getContext('2d');
+
+  if(skin === 'forest'){
+    // Green grass
+    ctx.fillStyle = '#4a8a2a';
+    ctx.fillRect(0,0,128,128);
+    // Grass blades
+    for(let i=0;i<200;i++){
+      const shade = Math.random()*60;
+      ctx.strokeStyle = `rgba(${40+shade},${120+Math.random()*60},${20+shade},0.5)`;
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      const gx = Math.random()*128, gy = Math.random()*128;
+      const angle = Math.random()*Math.PI - Math.PI/2;
+      ctx.moveTo(gx, gy);
+      ctx.lineTo(gx + Math.cos(angle)*4, gy + Math.sin(angle)*4);
+      ctx.stroke();
+    }
+    // Dirt spots
+    for(let i=0;i<20;i++){
+      ctx.fillStyle = `rgba(80,60,30,0.15)`;
+      ctx.beginPath(); ctx.arc(Math.random()*128, Math.random()*128, 1+Math.random()*2, 0, Math.PI*2); ctx.fill();
+    }
+  } else if(skin === 'desert'){
+    // Sand
+    ctx.fillStyle = '#e8c872';
+    ctx.fillRect(0,0,128,128);
+    // Pebble dots
+    for(let i=0;i<40;i++){
+      ctx.fillStyle = `rgba(${160+Math.random()*40},${130+Math.random()*30},${70+Math.random()*20},0.3)`;
+      ctx.beginPath(); ctx.arc(Math.random()*128, Math.random()*128, 1+Math.random()*2, 0, Math.PI*2); ctx.fill();
+    }
+    // Wind streaks
+    for(let i=0;i<15;i++){
+      ctx.strokeStyle = `rgba(200,180,100,0.2)`;
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      const sx = Math.random()*128, sy = Math.random()*128;
+      ctx.moveTo(sx, sy);
+      ctx.lineTo(sx + 10+Math.random()*20, sy + Math.random()*4-2);
+      ctx.stroke();
+    }
+  } else if(skin === 'rainy'){
+    // Polished marble tile floor
+    ctx.fillStyle = '#f0ece0';
+    ctx.fillRect(0,0,128,128);
+    // Large square tiles with gold grout
+    const tileSize = 32;
+    ctx.strokeStyle = '#c8b870';
+    ctx.lineWidth = 2;
+    for(let x=0;x<=128;x+=tileSize){
+      ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,128); ctx.stroke();
+    }
+    for(let y=0;y<=128;y+=tileSize){
+      ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(128,y); ctx.stroke();
+    }
+    // Subtle gray marble veins inside tiles
+    for(let i=0;i<20;i++){
+      ctx.strokeStyle = `rgba(160,155,140,${0.15+Math.random()*0.15})`;
+      ctx.lineWidth = 0.5;
+      ctx.beginPath();
+      const vx = Math.random()*128, vy = Math.random()*128;
+      ctx.moveTo(vx, vy);
+      ctx.lineTo(vx+Math.random()*20-10, vy+Math.random()*15-7);
+      ctx.stroke();
+    }
+  } else if(skin === 'stadium'){
+    // Green turf/sports field
+    ctx.fillStyle = '#3a8030';
+    ctx.fillRect(0,0,128,128);
+    // Mowing stripe lines (alternating greens)
+    for(let y=0;y<128;y+=16){
+      ctx.fillStyle = y%(32) === 0 ? '#3a8030' : '#348028';
+      ctx.fillRect(0, y, 128, 16);
+    }
+    // White boundary line markings
+    ctx.strokeStyle = '#ffffff';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(10, 10, 108, 108);
+    ctx.beginPath(); ctx.moveTo(64, 10); ctx.lineTo(64, 118); ctx.stroke();
+    ctx.beginPath(); ctx.arc(64, 64, 20, 0, Math.PI*2); ctx.stroke();
+    // Grass texture dots
+    for(let i=0;i<60;i++){
+      ctx.fillStyle = `rgba(${30+Math.random()*20},${100+Math.random()*40},${20+Math.random()*20},0.2)`;
+      ctx.fillRect(Math.random()*128, Math.random()*128, 1, 2);
+    }
+  } else if(skin === 'snow'){
+    // Snowy ground
+    ctx.fillStyle = '#e8f0f8';
+    ctx.fillRect(0,0,128,128);
+    // Footprint impressions
+    for(let i=0;i<8;i++){
+      ctx.fillStyle = 'rgba(180,195,210,0.3)';
+      ctx.beginPath(); ctx.ellipse(Math.random()*128, Math.random()*128, 4, 6, Math.random()*Math.PI, 0, Math.PI*2); ctx.fill();
+    }
+    // Glitter sparkle dots
+    for(let i=0;i<30;i++){
+      ctx.fillStyle = `rgba(255,255,255,${0.6+Math.random()*0.4})`;
+      ctx.beginPath(); ctx.arc(Math.random()*128, Math.random()*128, 0.5+Math.random()*1, 0, Math.PI*2); ctx.fill();
+    }
+    // Exposed rock patches
+    for(let i=0;i<4;i++){
+      ctx.fillStyle = `rgba(140,140,150,${0.2+Math.random()*0.2})`;
+      ctx.beginPath(); ctx.arc(Math.random()*128, Math.random()*128, 4+Math.random()*6, 0, Math.PI*2); ctx.fill();
+    }
+  } else if(skin === 'classroom'){
+    // Wooden floor boards
+    ctx.fillStyle = '#a07040';
+    ctx.fillRect(0,0,128,128);
+    // Parallel horizontal plank lines
+    const plankH = 16;
+    for(let y=0;y<128;y+=plankH){
+      const v = Math.random()*10-5;
+      ctx.fillStyle = `rgb(${160+v},${112+v},${64+v})`;
+      ctx.fillRect(0, y+1, 128, plankH-2);
+      // Wood grain streaks within plank
+      ctx.strokeStyle = `rgba(100,70,30,0.15)`;
+      ctx.lineWidth = 1;
+      for(let g=0;g<3;g++){
+        ctx.beginPath();
+        let gx = 0, gy = y + 3 + Math.random()*(plankH-6);
+        ctx.moveTo(gx, gy);
+        for(let s=0;s<5;s++){
+          gx += 25+Math.random()*10;
+          gy += Math.random()*3-1.5;
+          ctx.lineTo(gx, gy);
+        }
+        ctx.stroke();
+      }
+      // Plank separator
+      ctx.strokeStyle = '#7a5020';
+      ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(128, y); ctx.stroke();
+    }
+  } else if(skin === 'factory'){
+    // Industrial metal grating
+    ctx.fillStyle = '#505860';
+    ctx.fillRect(0,0,128,128);
+    // Grid pattern
+    ctx.strokeStyle = '#707880';
+    ctx.lineWidth = 1;
+    for(let x=0;x<=128;x+=8){
+      ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,128); ctx.stroke();
+    }
+    for(let y=0;y<=128;y+=8){
+      ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(128,y); ctx.stroke();
+    }
+    // Diamond plate texture
+    for(let y=4;y<128;y+=12){
+      for(let x=4;x<128;x+=12){
+        const ox = (Math.floor(y/12)%2)*6;
+        ctx.fillStyle = '#606870';
+        ctx.beginPath();
+        ctx.moveTo(x+ox, y-3); ctx.lineTo(x+ox+4, y); ctx.lineTo(x+ox, y+3); ctx.lineTo(x+ox-4, y);
+        ctx.closePath(); ctx.fill();
+      }
+    }
+    // Oil stain
+    for(let i=0;i<3;i++){
+      ctx.fillStyle = `rgba(20,20,30,${0.2+Math.random()*0.2})`;
+      ctx.beginPath(); ctx.arc(Math.random()*128, Math.random()*128, 4+Math.random()*8, 0, Math.PI*2); ctx.fill();
+    }
+  } else if(skin === 'beach'){
+    // Sandy beach with shells
+    ctx.fillStyle = '#f0d890';
+    ctx.fillRect(0,0,128,128);
+    // Sand texture (scattered dots)
+    for(let i=0;i<100;i++){
+      const sandShade = Math.random()*30;
+      ctx.fillStyle = `rgba(${220+sandShade},${190+sandShade},${120+sandShade},0.3)`;
+      ctx.fillRect(Math.random()*128, Math.random()*128, 1+Math.random()*2, 1+Math.random()*2);
+    }
+    // Small shell shapes
+    for(let i=0;i<8;i++){
+      const sx = Math.random()*128, sy = Math.random()*100;
+      ctx.strokeStyle = Math.random()>0.5 ? '#ffcccc' : '#fffff0';
+      ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.arc(sx, sy, 2+Math.random()*2, 0, Math.PI*1.5); ctx.stroke();
+    }
+    // Wavy water edge line at bottom
+    ctx.strokeStyle = '#4090c0';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(0, 120);
+    for(let x=0;x<=128;x+=8){
+      ctx.lineTo(x, 118 + Math.sin(x*0.15)*4);
+    }
+    ctx.stroke();
+    ctx.fillStyle = 'rgba(64,160,220,0.15)';
+    ctx.fillRect(0, 120, 128, 8);
+  } else if(skin === 'underwater'){
+    // Ocean floor with sand and coral
+    ctx.fillStyle = '#1a3050';
+    ctx.fillRect(0,0,128,128);
+    // Sandy patches
+    for(let i=0;i<10;i++){
+      ctx.fillStyle = `rgba(${80+Math.random()*40},${70+Math.random()*30},${40+Math.random()*20},${0.2+Math.random()*0.2})`;
+      ctx.beginPath(); ctx.ellipse(Math.random()*128, Math.random()*128, 6+Math.random()*10, 4+Math.random()*6, Math.random()*Math.PI, 0, Math.PI*2); ctx.fill();
+    }
+    // Small coral nubs
+    for(let i=0;i<15;i++){
+      ctx.fillStyle = Math.random()>0.5 ? `rgba(200,100,130,${0.4+Math.random()*0.3})` : `rgba(220,140,60,${0.4+Math.random()*0.3})`;
+      ctx.beginPath(); ctx.arc(Math.random()*128, Math.random()*128, 1.5+Math.random()*2.5, 0, Math.PI*2); ctx.fill();
+    }
+    // Seagrass lines (vertical wavy strokes)
+    for(let i=0;i<10;i++){
+      ctx.strokeStyle = `rgba(${30+Math.random()*30},${120+Math.random()*50},${50+Math.random()*30},0.5)`;
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      let gx = Math.random()*128, gy = 128;
+      ctx.moveTo(gx, gy);
+      for(let s=0;s<4;s++){
+        gx += Math.random()*6-3;
+        gy -= 8+Math.random()*8;
+        ctx.lineTo(gx, gy);
+      }
+      ctx.stroke();
+    }
+  } else if(skin === 'city'){
+    // City road with crosswalks
+    ctx.fillStyle = '#2a2a30';
+    ctx.fillRect(0,0,128,128);
+    // Road lines
+    ctx.strokeStyle = '#f0c020';ctx.lineWidth = 2;
+    ctx.setLineDash([8,6]);
+    ctx.beginPath();ctx.moveTo(64,0);ctx.lineTo(64,128);ctx.stroke();
+    ctx.setLineDash([]);
+    // Crosswalk stripes
+    ctx.fillStyle = '#e0e0e0';
+    for(let i=0;i<5;i++){
+      ctx.fillRect(20, 20+i*18, 40, 10);
+    }
+    // Sidewalk edge
+    ctx.fillStyle = '#505050';
+    ctx.fillRect(0,0,128,8);ctx.fillRect(0,120,128,8);
+  } else { // rainynight (dungeon default)
+    // Dark flagstone
+    ctx.fillStyle = '#2a2a3a';
+    ctx.fillRect(0,0,128,128);
+    // Tile grid
+    ctx.strokeStyle = '#1a1a2a';
+    ctx.lineWidth = 2;
+    const tileSize = 32;
+    for(let x=0;x<=128;x+=tileSize){
+      ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,128); ctx.stroke();
+    }
+    for(let y=0;y<=128;y+=tileSize){
+      ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(128,y); ctx.stroke();
+    }
+    // Puddle spots
+    for(let i=0;i<8;i++){
+      ctx.fillStyle = `rgba(20,20,40,0.3)`;
+      ctx.beginPath(); ctx.arc(Math.random()*128, Math.random()*128, 3+Math.random()*5, 0, Math.PI*2); ctx.fill();
+    }
+    // Noise
+    for(let i=0;i<100;i++){
+      ctx.fillStyle = `rgba(${20+Math.random()*30},${20+Math.random()*30},${30+Math.random()*30},0.2)`;
+      ctx.fillRect(Math.random()*128,Math.random()*128,1,1);
+    }
+  }
+  return c;
+}
+
+function getSkinColors(skin){
+  const themes = {
+    forest: {
+      sky:0x87ceeb, fog:0x87ceeb, fogNear:35, fogFar:85,
+      wallColor:0x8aaa7a, capColor:0x5a7a4a, ambient:0xffffff, ambInt:0.5,
+      sunColor:0xfffde8, sunInt:1.5, hemiSky:0x87ceeb, hemiGround:0x4a8a3a,
+      weather:'sunny'
+    },
+    desert: {
+      sky:0xe8c060, fog:0xd4a840, fogNear:30, fogFar:70,
+      wallColor:0xe0b070, capColor:0xa08040, ambient:0xfff8e0, ambInt:0.55,
+      sunColor:0xffe0a0, sunInt:1.6, hemiSky:0xe8c060, hemiGround:0xc89830,
+      weather:'cloudy'
+    },
+    rainynight: {
+      sky:0x1a1a2e, fog:0x101020, fogNear:12, fogFar:45,
+      wallColor:0x4a4a5a, capColor:0x3a3a4a, ambient:0x404055, ambInt:0.4,
+      sunColor:0x555577, sunInt:0.5, hemiSky:0x1a1a2e, hemiGround:0x101018,
+      weather:'storm'
+    },
+    stadium: {
+      sky:0x60a0e0, fog:0x60a0e0, fogNear:40, fogFar:95,
+      wallColor:0xd0d0d8, capColor:0x4080c0, ambient:0xf0f8ff, ambInt:0.6,
+      sunColor:0xffffff, sunInt:1.6, hemiSky:0x60a0e0, hemiGround:0x408040,
+      weather:'sunny'
+    },
+    snow: {
+      sky:0xc8d8e8, fog:0xc8d8e8, fogNear:25, fogFar:60,
+      wallColor:0xe8e8f0, capColor:0x8090a0, ambient:0xe0e8f0, ambInt:0.6,
+      sunColor:0xf0f0ff, sunInt:1.2, hemiSky:0xc8d8e8, hemiGround:0xe0e8f0,
+      weather:'snow'
+    },
+    classroom: {
+      sky:0x90c8f0, fog:0x90c8f0, fogNear:35, fogFar:80,
+      wallColor:0xf0e0c0, capColor:0x806040, ambient:0xfff8e8, ambInt:0.55,
+      sunColor:0xfff0d0, sunInt:1.3, hemiSky:0x90c8f0, hemiGround:0x906830,
+      weather:'sunny'
+    },
+    factory: {
+      sky:0x90a0b0, fog:0x88a0b0, fogNear:30, fogFar:70,
+      wallColor:0xc0c4c8, capColor:0xf0c020, ambient:0xe0e4e8, ambInt:0.55,
+      sunColor:0xf0f0f0, sunInt:1.3, hemiSky:0x90a0b0, hemiGround:0x606868,
+      weather:'cloudy'
+    },
+    beach: {
+      sky:0x40c8ff, fog:0x40c8ff, fogNear:40, fogFar:90,
+      wallColor:0xf0e0a0, capColor:0xd0b870, ambient:0xfffff0, ambInt:0.65,
+      sunColor:0xfffde0, sunInt:1.7, hemiSky:0x40c8ff, hemiGround:0xf0d880,
+      weather:'sunny'
+    },
+    underwater: {
+      sky:0x1090d0, fog:0x0880c0, fogNear:20, fogFar:55,
+      wallColor:0x40a0d0, capColor:0x3080a0, ambient:0x60b0e0, ambInt:0.55,
+      sunColor:0x80c0e0, sunInt:1.0, hemiSky:0x1090d0, hemiGround:0x106080,
+      weather:'bubbles'
+    },
+    city: {
+      sky:0x60a8e8, fog:0x60a8e8, fogNear:30, fogFar:70,
+      wallColor:0x505870, capColor:0x3a4050, ambient:0xd0d8e0, ambInt:0.55,
+      sunColor:0xfff8e0, sunInt:1.4, hemiSky:0x60a8e8, hemiGround:0x404850,
+      weather:'sunny'
+    }
+  };
+  return themes[skin] || themes.forest;
+}
+
+// ===== MAZE GENERATION (DFS recursive backtracker) =====
+function generateMaze(size){
+  const grid=[];
+  for(let r=0;r<size;r++){grid[r]=[];for(let c=0;c<size;c++)grid[r][c]={visited:false,walls:{N:true,S:true,E:true,W:true}};}
+  grid[0][0].visited=true;
+  const stack=[{r:0,c:0}];
+  const dirs=[{dr:-1,dc:0,w:'N',o:'S'},{dr:1,dc:0,w:'S',o:'N'},{dr:0,dc:1,w:'E',o:'W'},{dr:0,dc:-1,w:'W',o:'E'}];
+  while(stack.length>0){
+    const curr=stack[stack.length-1];
+    const nb=[];
+    for(const d of dirs){
+      const nr=curr.r+d.dr,nc=curr.c+d.dc;
+      if(nr>=0&&nr<size&&nc>=0&&nc<size&&!grid[nr][nc].visited)
+        nb.push({r:nr,c:nc,w:d.w,o:d.o});
+    }
+    if(!nb.length){stack.pop();continue;}
+    const next=nb[Math.floor(Math.random()*nb.length)];
+    grid[curr.r][curr.c].walls[next.w]=false;
+    grid[next.r][next.c].walls[next.o]=false;
+    grid[next.r][next.c].visited=true;
+    stack.push({r:next.r,c:next.c});
+  }
+  
+  // Add multiple paths: remove random walls to create alternate routes
+  // More walls removed in earlier (easier) levels, fewer in harder levels
+  const difficulty = currentLevel / LEVELS.length; // 0=easy, 1=hard
+  const extraPaths = Math.max(1, Math.floor(size * (1.5 - difficulty)));
+  for(let i = 0; i < extraPaths; i++){
+    const r = Math.floor(Math.random() * size);
+    const c = Math.floor(Math.random() * size);
+    const d = dirs[Math.floor(Math.random() * dirs.length)];
+    const nr = r + d.dr, nc = c + d.dc;
+    if(nr >= 0 && nr < size && nc >= 0 && nc < size){
+      // Remove wall between (r,c) and (nr,nc)
+      grid[r][c].walls[d.w] = false;
+      grid[nr][nc].walls[d.o] = false;
+    }
+  }
+  
+  return grid;
+}
+
+// ===== BUILD 3D MAZE =====
+function buildMaze3D(){
+  const lvl = LEVELS[currentLevel];
+  const size = lvl.size;
+  const skin = lvl.skin;
+  maze = generateMaze(size);
+
+  const colors = getSkinColors(skin);
+
+  // Wall texture
+  const wallCanvas = createWallTexture(skin);
+  const wallTex = new THREE.CanvasTexture(wallCanvas);
+  wallTex.wrapS = wallTex.wrapT = THREE.RepeatWrapping;
+  wallTex.repeat.set(1.2, 1.0);
+  const wallMat = new THREE.MeshStandardMaterial({map:wallTex, roughness:0.9, color:colors.wallColor});
+
+  const wGeoN = new THREE.BoxGeometry(CELL_SIZE, WALL_HEIGHT, WALL_THICK);
+  const wGeoW = new THREE.BoxGeometry(WALL_THICK, WALL_HEIGHT, CELL_SIZE);
+
+  // Floor texture
+  const floorCanvas = createFloorTexture(skin);
+  const fTex = new THREE.CanvasTexture(floorCanvas);
+  fTex.wrapS = fTex.wrapT = THREE.RepeatWrapping;
+  fTex.repeat.set(size*2, size*2);
+
+  const floorSize = size*CELL_SIZE + 10;
+  const floor = new THREE.Mesh(
+    new THREE.PlaneGeometry(floorSize, floorSize),
+    new THREE.MeshStandardMaterial({map:fTex, roughness:0.85})
+  );
+  floor.rotation.x = -Math.PI/2;
+  floor.position.set(size*CELL_SIZE/2, 0, size*CELL_SIZE/2);
+  floor.receiveShadow = true;
+  scene.add(floor);
+
+  // Wall cap material
+  const capMat = new THREE.MeshStandardMaterial({color:colors.capColor, roughness:0.8});
+
+  for(let r=0;r<size;r++){
+    for(let c=0;c<size;c++){
+      const cx = c*CELL_SIZE+CELL_SIZE/2, cz = r*CELL_SIZE+CELL_SIZE/2;
+      const cell = maze[r][c];
+
+      if(cell.walls.N){
+        const w=new THREE.Mesh(wGeoN,wallMat);
+        w.position.set(cx,WALL_HEIGHT/2,cz-CELL_SIZE/2);
+        w.castShadow=true;w.receiveShadow=true;
+        scene.add(w);walls.push(w);wallMeshes.push(w);
+        const cap=new THREE.Mesh(new THREE.BoxGeometry(CELL_SIZE,.25,WALL_THICK+.2),capMat);
+        cap.position.set(cx,WALL_HEIGHT+.12,cz-CELL_SIZE/2);scene.add(cap);
+      }
+      if(r===size-1&&cell.walls.S){
+        const w=new THREE.Mesh(wGeoN,wallMat);
+        w.position.set(cx,WALL_HEIGHT/2,cz+CELL_SIZE/2);
+        w.castShadow=true;scene.add(w);walls.push(w);wallMeshes.push(w);
+        const cap=new THREE.Mesh(new THREE.BoxGeometry(CELL_SIZE,.25,WALL_THICK+.2),capMat);
+        cap.position.set(cx,WALL_HEIGHT+.12,cz+CELL_SIZE/2);scene.add(cap);
+      }
+      if(cell.walls.W){
+        const w=new THREE.Mesh(wGeoW,wallMat);
+        w.position.set(cx-CELL_SIZE/2,WALL_HEIGHT/2,cz);
+        w.castShadow=true;w.receiveShadow=true;
+        scene.add(w);walls.push(w);wallMeshes.push(w);
+        const cap=new THREE.Mesh(new THREE.BoxGeometry(WALL_THICK+.2,.25,CELL_SIZE),capMat);
+        cap.position.set(cx-CELL_SIZE/2,WALL_HEIGHT+.12,cz);scene.add(cap);
+      }
+      if(c===size-1&&cell.walls.E){
+        const w=new THREE.Mesh(wGeoW,wallMat);
+        w.position.set(cx+CELL_SIZE/2,WALL_HEIGHT/2,cz);
+        w.castShadow=true;scene.add(w);walls.push(w);wallMeshes.push(w);
+        const cap=new THREE.Mesh(new THREE.BoxGeometry(WALL_THICK+.2,.25,CELL_SIZE),capMat);
+        cap.position.set(cx+CELL_SIZE/2,WALL_HEIGHT+.12,cz);scene.add(cap);
+      }
+    }
+  }
+
+  // Goal beacon
+  const gx=(size-1)*CELL_SIZE+CELL_SIZE/2, gz=(size-1)*CELL_SIZE+CELL_SIZE/2;
+  goalMesh=new THREE.Mesh(
+    new THREE.CylinderGeometry(.25,.5,3,8),
+    new THREE.MeshStandardMaterial({color:0x00dd66,emissive:0x00dd66,emissiveIntensity:0.6})
+  );
+  goalMesh.position.set(gx,1.5,gz);scene.add(goalMesh);
+  goalRing=new THREE.Mesh(
+    new THREE.TorusGeometry(1,.06,8,32),
+    new THREE.MeshBasicMaterial({color:0x00ff88,transparent:true,opacity:0.5})
+  );
+  goalRing.rotation.x=Math.PI/2;goalRing.position.set(gx,.2,gz);scene.add(goalRing);
+  const goalLight = new THREE.PointLight(0x00ff88,2,12);
+  goalLight.position.set(gx,3,gz);scene.add(goalLight);
+
+  // Background objects
+  if(skin === 'forest'){
+    // Mountains + trees
+    const mtMat = new THREE.MeshStandardMaterial({color:0x5a7a5a,roughness:0.9});
+    const treeTrunk = new THREE.MeshStandardMaterial({color:0x6b4226,roughness:0.8});
+    const treeLeaf = new THREE.MeshStandardMaterial({color:0x3a8a3a,roughness:0.8});
+    const edge = size*CELL_SIZE;
+    for(let i=0;i<8;i++){
+      const angle = Math.random()*Math.PI*2;
+      const dist = edge*0.7 + Math.random()*edge*0.4;
+      const mx = edge/2 + Math.cos(angle)*dist;
+      const mz = edge/2 + Math.sin(angle)*dist;
+      const h = 8+Math.random()*14;
+      const mt=new THREE.Mesh(new THREE.ConeGeometry(5+Math.random()*4,h,6),mtMat);
+      mt.position.set(mx,h/2,mz);scene.add(mt);
+    }
+    for(let i=0;i<12;i++){
+      const angle = Math.random()*Math.PI*2;
+      const dist = edge*0.55 + Math.random()*edge*0.5;
+      const tx = edge/2 + Math.cos(angle)*dist;
+      const tz = edge/2 + Math.sin(angle)*dist;
+      const trunk = new THREE.Mesh(new THREE.CylinderGeometry(.2,.3,3,6), treeTrunk);
+      trunk.position.set(tx,1.5,tz); scene.add(trunk);
+      const leaf = new THREE.Mesh(new THREE.SphereGeometry(1.5+Math.random(),6,6), treeLeaf);
+      leaf.position.set(tx,4+Math.random(),tz); scene.add(leaf);
+    }
+  } else if(skin === 'desert'){
+    // Pyramids
+    const pyrMat = new THREE.MeshStandardMaterial({color:0xd4a050,roughness:0.9});
+    const edge = size*CELL_SIZE;
+    for(let i=0;i<5;i++){
+      const angle = Math.random()*Math.PI*2;
+      const dist = edge*0.7 + Math.random()*edge*0.4;
+      const px = edge/2 + Math.cos(angle)*dist;
+      const pz = edge/2 + Math.sin(angle)*dist;
+      const h = 10+Math.random()*15;
+      const pyr=new THREE.Mesh(new THREE.ConeGeometry(6+Math.random()*5,h,4),pyrMat);
+      pyr.position.set(px,h/2,pz);pyr.rotation.y=Math.random()*Math.PI/4;scene.add(pyr);
+    }
+  }
+  // Dungeon: no background objects (pure dark)
+
+  // Dungeon torches
+  torchLights = [];
+  if(skin === 'rainynight'){
+    const numTorches = 3 + Math.floor(Math.random()*3); // 3-5
+    for(let i=0;i<numTorches;i++){
+      const tr = Math.floor(Math.random()*size);
+      const tc = Math.floor(Math.random()*size);
+      const tx = tc*CELL_SIZE+CELL_SIZE/2;
+      const tz = tr*CELL_SIZE+CELL_SIZE/2;
+      const torch = new THREE.PointLight(0xff6600, 2, 10);
+      torch.position.set(tx, WALL_HEIGHT-1, tz);
+      scene.add(torch);
+      torchLights.push(torch);
+      // Torch visual (small flame geometry)
+      const flame = new THREE.Mesh(
+        new THREE.ConeGeometry(.1,.4,6),
+        new THREE.MeshBasicMaterial({color:0xff8800})
+      );
+      flame.position.set(tx, WALL_HEIGHT-0.8, tz);
+      scene.add(flame);
+    }
+  }
+}
+
+// ===== CHARACTER (GLB Model) =====
+let mixer = null;
+let animations = {};
+let currentAction = null;
+let attackAnims = [];
+
+async function buildCharacter(){
+  charGroup = new THREE.Group();
+  charGroup.position.set(CELL_SIZE/2, 0, CELL_SIZE/2);
+  scene.add(charGroup);
+  
+  const loader = new GLTFLoader();
+  
+  const gltf = await new Promise((resolve, reject) => {
+    loader.load('maze_char.glb', resolve, undefined, (err)=>{console.error('GLB load error:',err);reject(err);});
+  });
+  
+  const model = gltf.scene;
+  
+  // Auto-scale based on bounding box to target height (2/3 of wall)
+  const box = new THREE.Box3().setFromObject(model);
+  const modelHeight = box.max.y - box.min.y;
+  const targetHeight = WALL_HEIGHT * 0.6; // 60% of wall height
+  const scale = targetHeight / modelHeight;
+  model.scale.set(scale, scale, scale);
+  
+  // Move up so feet are at Y=0
+  const boxScaled = new THREE.Box3().setFromObject(model);
+  model.position.y = -boxScaled.min.y;
+  
+  model.traverse((child) => {
+    if(child.isMesh){
+      child.castShadow = true; child.receiveShadow = true;
+      // Fix transparency/see-through: force opaque rendering
+      if(child.material){
+        const mat = child.material;
+        mat.transparent = false;
+        mat.opacity = 1.0;
+        mat.alphaTest = 0;
+        mat.depthWrite = true;
+        mat.depthTest = true;
+        mat.side = THREE.DoubleSide;
+        mat.blending = THREE.NormalBlending;
+        // Remove alpha map if causing issues
+        if(mat.alphaMap) mat.alphaMap = null;
+        mat.needsUpdate = true;
+      }
+    }
+  });
+  charGroup.add(model);
+  
+  // Setup AnimationMixer
+  mixer = new THREE.AnimationMixer(model);
+  
+  // Map animations by name
+  for(const clip of gltf.animations){
+    animations[clip.name] = mixer.clipAction(clip);
+  }
+  console.log('Loaded animations:', Object.keys(animations));
+  
+  // Attack animations pool
+  attackAnims = ['Spartan_Kick'];
+  
+  // Start with idle (use Walking at very slow speed as idle substitute)
+  playAnimation('Walking', true);
+}
+
+function playAnimation(name, loop = false, onFinish = null){
+  if(!animations[name]) return;
+  // If game ended and this isn't the result animation, block it
+  if(gameEnded && name !== 'Victory_Cheer' && name !== 'Lie_Back_Leg_Swing') return;
+  const newAction = animations[name];
+  
+  if(currentAction === newAction) return;
+  
+  if(currentAction){
+    currentAction.fadeOut(0.2);
+  }
+  
+  newAction.reset();
+  newAction.setLoop(loop ? THREE.LoopRepeat : THREE.LoopOnce);
+  newAction.clampWhenFinished = !loop;
+  newAction.fadeIn(0.2);
+  newAction.play();
+  
+  if(onFinish && !loop){
+    const onDone = ()=>{
+      mixer.removeEventListener('finished', onDone);
+      onFinish();
+    };
+    mixer.addEventListener('finished', onDone);
+  }
+  
+  currentAction = newAction;
+}
+
+// ===== ANIMATION STATE MACHINE =====
+let charAnimState = 'idle'; // idle, walk, run, attack, jump
+
+function animateChar(dt){
+  if(!mixer) return;
+  
+  const speed = Math.sqrt(moveDir.x*moveDir.x + moveDir.z*moveDir.z);
+  
+  if(charAnimState === 'attack') return; // don't interrupt attack
+  
+  if(!playerOnGround){
+    if(charAnimState !== 'jump'){
+      charAnimState = 'jump';
+      playAnimation('happy_jump_m', false, ()=>{ charAnimState = 'idle'; });
+    }
+  } else if(speed > .1){
+    if(isRunning && charAnimState !== 'run'){
+      charAnimState = 'run';
+      playAnimation('Lean_Forward_Sprint_inplace', true);
+      // Limit run animation speed to reduce body lean/forward displacement
+      if(animations['Lean_Forward_Sprint_inplace']) animations['Lean_Forward_Sprint_inplace'].timeScale = 0.7;
+    } else if(!isRunning && charAnimState !== 'walk'){
+      charAnimState = 'walk';
+      playAnimation('Walking', true);
+    }
+  } else {
+    if(charAnimState !== 'idle'){
+      charAnimState = 'idle';
+      // Stop all animations - character stands still
+      if(currentAction){
+        currentAction.fadeOut(0.3);
+        currentAction = null;
+      }
+    }
+  }
+  
+  // Normal speed for walk/run
+  if(charAnimState === 'walk' && animations['Walking']) animations['Walking'].timeScale = 1;
+  if(charAnimState === 'run' && animations['Lean_Forward_Sprint_inplace']) animations['Lean_Forward_Sprint_inplace'].timeScale = 1;
+}
+
+let comboCount = 0;
+let comboTimer = 0;
+let lastAttackTime = 0;
+
+function triggerAttack(){
+  if(charAnimState === 'victory' || charAnimState === 'fail') return;
+  // Allow re-attack after 0.8s even if previous attack still playing
+  const now = Date.now();
+  if(charAnimState === 'attack' && (now - lastAttackTime) < 800) return;
+  
+  charAnimState = 'attack';
+  lastAttackTime = now;
+  playSfx('attack');
+  
+  // Combo logic: normal = Punch_Combo_1, 3+ consecutive = Sweep_Kick
+  comboCount++;
+  comboTimer = now;
+  const name = 'Spartan_Kick';
+  if(comboCount >= 3) comboCount = 0;
+  
+  // Force restart animation (stop current then play new)
+  if(currentAction){ currentAction.stop(); currentAction = null; }
+  playAnimation(name, false, ()=>{
+    if(gameEnded) return;
+    charAnimState = 'idle';
+    if(currentAction){ currentAction.fadeOut(0.2); currentAction = null; }
+    setTimeout(()=>{
+      if(Date.now() - comboTimer >= 1800) comboCount = 0;
+    }, 2000);
+  });
+  checkPlayerAttackMonster();
+}
+
+// ===== MONSTER SYSTEM =====
+function createMonsterMesh(){
+  const group = new THREE.Group();
+  // Body: dark purple sphere (larger)
+  const bodyMat = new THREE.MeshStandardMaterial({color:0x4a0080, roughness:0.6});
+  const body = new THREE.Mesh(new THREE.SphereGeometry(0.6, 12, 10), bodyMat);
+  body.position.y = 0.8;
+  body.castShadow = true;
+  group.add(body);
+  // Eyes: two small red glowing spheres
+  const eyeMat = new THREE.MeshBasicMaterial({color:0xff0000});
+  const eyeL = new THREE.Mesh(new THREE.SphereGeometry(0.1, 8, 6), eyeMat);
+  eyeL.position.set(-0.22, 0.95, 0.48);
+  group.add(eyeL);
+  const eyeR = new THREE.Mesh(new THREE.SphereGeometry(0.1, 8, 6), eyeMat);
+  eyeR.position.set(0.22, 0.95, 0.48);
+  group.add(eyeR);
+  // Horns: two cones on top
+  const hornMat = new THREE.MeshStandardMaterial({color:0x330044, roughness:0.5});
+  const hornL = new THREE.Mesh(new THREE.ConeGeometry(0.08, 0.4, 6), hornMat);
+  hornL.position.set(-0.25, 1.45, 0);
+  hornL.rotation.z = 0.3;
+  group.add(hornL);
+  const hornR = new THREE.Mesh(new THREE.ConeGeometry(0.08, 0.4, 6), hornMat);
+  hornR.position.set(0.25, 1.45, 0);
+  hornR.rotation.z = -0.3;
+  group.add(hornR);
+  // WEAPON: spiked club (cylinder + sphere tip)
+  const weaponGroup = new THREE.Group();
+  const handleMat = new THREE.MeshStandardMaterial({color:0x5a3a1a, roughness:0.7});
+  const handle = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.05, 0.8, 6), handleMat);
+  handle.position.y = 0.4;
+  weaponGroup.add(handle);
+  const headMat = new THREE.MeshStandardMaterial({color:0x666666, roughness:0.4, metalness:0.6});
+  const clubHead = new THREE.Mesh(new THREE.SphereGeometry(0.12, 8, 6), headMat);
+  clubHead.position.y = 0.8;
+  weaponGroup.add(clubHead);
+  // Spikes on club
+  const spikeMat = new THREE.MeshStandardMaterial({color:0x888888, metalness:0.8});
+  for(let i = 0; i < 5; i++){
+    const spike = new THREE.Mesh(new THREE.ConeGeometry(0.03, 0.1, 4), spikeMat);
+    const angle = (i/5)*Math.PI*2;
+    spike.position.set(Math.cos(angle)*0.12, 0.8, Math.sin(angle)*0.12);
+    spike.lookAt(new THREE.Vector3(Math.cos(angle)*2, 0.8, Math.sin(angle)*2));
+    weaponGroup.add(spike);
+  }
+  weaponGroup.position.set(0.45, 0.3, 0);
+  weaponGroup.rotation.z = -0.3;
+  group.add(weaponGroup);
+  group.userData.weapon = weaponGroup;
+  // Point light for glow
+  const glow = new THREE.PointLight(0x8800ff, 0.5, 3);
+  glow.position.set(0, 0.6, 0);
+  group.add(glow);
+  return group;
+}
+
+function spawnMonsters(){
+  // Remove old monsters
+  for(const m of monsters){ scene.remove(m.group); }
+  monsters = [];
+  const size = LEVELS[currentLevel].size;
+  const count = Math.min(2 + Math.floor(currentLevel/2), 6);
+  const speed = 1.5 + currentLevel * 0.2;
+  for(let i = 0; i < count; i++){
+    let r, c;
+    // Find random cell not at start (0,0) or goal (size-1,size-1)
+    do {
+      r = Math.floor(Math.random() * size);
+      c = Math.floor(Math.random() * size);
+    } while((r===0 && c===0) || (r===size-1 && c===size-1));
+    const group = createMonsterMesh();
+    const px = c * CELL_SIZE + CELL_SIZE/2;
+    const pz = r * CELL_SIZE + CELL_SIZE/2;
+    group.position.set(px, 0, pz);
+    scene.add(group);
+    monsters.push({
+      group,
+      targetCell: {r, c},
+      currentCell: {r, c},
+      speed,
+      state: 'patrol',
+      attackCooldown: 0,
+      path: null
+    });
+  }
+}
+
+// ===== COINS =====
+function spawnCoins(){
+  for(const c of coins) scene.remove(c.mesh);
+  coins = [];
+  const size = LEVELS[currentLevel].size;
+  const numCoins = Math.min(3 + Math.floor(currentLevel / 5), 12);
+  
+  // Coin with star emboss texture
+  const coinTexCanvas = document.createElement('canvas');
+  coinTexCanvas.width = 64; coinTexCanvas.height = 64;
+  const cctx = coinTexCanvas.getContext('2d');
+  cctx.fillStyle = '#ffe44d';cctx.fillRect(0,0,64,64);
+  cctx.fillStyle = '#fff8a0';cctx.beginPath();cctx.arc(32,32,20,0,Math.PI*2);cctx.fill();
+  // Star shape
+  cctx.fillStyle = '#ffcc00';cctx.beginPath();
+  for(let i=0;i<5;i++){const a=(i*72-90)*Math.PI/180;const b=((i*72)+36-90)*Math.PI/180;
+    cctx.lineTo(32+Math.cos(a)*14,32+Math.sin(a)*14);cctx.lineTo(32+Math.cos(b)*7,32+Math.sin(b)*7);}
+  cctx.closePath();cctx.fill();
+  // Rim
+  cctx.strokeStyle='#cc9900';cctx.lineWidth=3;cctx.beginPath();cctx.arc(32,32,28,0,Math.PI*2);cctx.stroke();
+  const coinTex = new THREE.CanvasTexture(coinTexCanvas);
+  
+  const coinGeo = new THREE.CylinderGeometry(0.35, 0.35, 0.08, 20);
+  const coinMat = new THREE.MeshStandardMaterial({map:coinTex, color:0xffee55, metalness:0.9, roughness:0.1, emissive:0xffcc00, emissiveIntensity:0.4});
+  
+  for(let i = 0; i < numCoins; i++){
+    // Random cell (not start or goal)
+    let cr, cc;
+    do {
+      cr = Math.floor(Math.random() * size);
+      cc = Math.floor(Math.random() * size);
+    } while((cr === 0 && cc === 0) || (cr === size-1 && cc === size-1));
+    
+    const mesh = new THREE.Mesh(coinGeo, coinMat);
+    const x = cc * CELL_SIZE + CELL_SIZE/2 + (Math.random()-0.5)*2;
+    const z = cr * CELL_SIZE + CELL_SIZE/2 + (Math.random()-0.5)*2;
+    mesh.position.set(x, 1.2, z);
+    mesh.rotation.x = Math.PI/2;
+    mesh.castShadow = true;
+    
+    // Add glow
+    const glow = new THREE.PointLight(0xffd700, 0.5, 3);
+    glow.position.set(x, 1.5, z);
+    scene.add(glow);
+    
+    scene.add(mesh);
+    coins.push({mesh, glow, baseY: 1.2, collected: false});
+  }
+}
+
+function updateCoins(dt){
+  if(!charGroup) return;
+  const time = Date.now() * 0.003;
+  for(const coin of coins){
+    if(coin.collected) continue;
+    // Floating + spinning animation
+    coin.mesh.position.y = coin.baseY + Math.sin(time + coin.mesh.position.x) * 0.2;
+    coin.mesh.rotation.z += dt * 3;
+    
+    // Check collection (player within 1.5 units)
+    const dx = charGroup.position.x - coin.mesh.position.x;
+    const dz = charGroup.position.z - coin.mesh.position.z;
+    const dist = Math.sqrt(dx*dx + dz*dz);
+    if(dist < 1.5){
+      // Collect!
+      coin.collected = true;
+      scene.remove(coin.mesh);
+      scene.remove(coin.glow);
+      // Time bonus +2s
+      startTime += 2000;
+      playSfx('jump'); // reuse bright chirp as coin sound
+      showFloatingText('+2s', '#ffd700');
+      showBarFloatingText('+2s', '#ffd700');
+    }
+  }
+}
+
+function getAdjacentCells(r, c){
+  const size = LEVELS[currentLevel].size;
+  const adj = [];
+  const cell = maze[r][c];
+  if(!cell.walls.N && r > 0) adj.push({r:r-1, c});
+  if(!cell.walls.S && r < size-1) adj.push({r:r+1, c});
+  if(!cell.walls.W && c > 0) adj.push({r, c:c-1});
+  if(!cell.walls.E && c < size-1) adj.push({r, c:c+1});
+  return adj;
+}
+
+function updateMonsters(dt){
+  if(!charGroup || !gameRunning) return;
+  const playerPos = charGroup.position;
+  
+  for(const m of monsters){
+    const mPos = m.group.position;
+    const dx = playerPos.x - mPos.x;
+    const dz = playerPos.z - mPos.z;
+    const distToPlayer = Math.sqrt(dx*dx + dz*dz);
+    
+    // State transitions (don't attack if player is jumping over)
+    const playerAirborne = charGroup.position.y > 1.2;
+    if(distToPlayer < 2.5 && !playerAirborne){
+      m.state = 'attack';
+    } else {
+      m.state = 'patrol';
+    }
+    
+    // Monster attack player
+    if(m.state === 'attack'){
+      m.attackCooldown -= dt;
+      if(m.attackCooldown <= 0 && distToPlayer < 2.5){
+        monsterAttackPlayer(m);
+        const cooldown = Math.max(1.5, 3 - currentLevel * 0.15);
+        m.attackCooldown = cooldown;
+      }
+      // Face player
+      m.group.rotation.y = Math.atan2(dx, dz);
+    }
+    
+    // Movement (patrol or chase)
+    let moveX = 0, moveZ = 0;
+    if(m.state === 'patrol'){
+      // Move toward target cell
+      const tx = m.targetCell.c * CELL_SIZE + CELL_SIZE/2;
+      const tz = m.targetCell.r * CELL_SIZE + CELL_SIZE/2;
+      const tdx = tx - mPos.x;
+      const tdz = tz - mPos.z;
+      const tdist = Math.sqrt(tdx*tdx + tdz*tdz);
+      if(tdist < 0.3){
+        // Pick new random adjacent cell
+        const adj = getAdjacentCells(m.targetCell.r, m.targetCell.c);
+        if(adj.length > 0){
+          const next = adj[Math.floor(Math.random()*adj.length)];
+          m.currentCell = {r: m.targetCell.r, c: m.targetCell.c};
+          m.targetCell = next;
+        }
+      } else {
+        moveX = (tdx/tdist) * m.speed * dt;
+        moveZ = (tdz/tdist) * m.speed * dt;
+        m.group.rotation.y = Math.atan2(tdx, tdz);
+      }
+    } else {
+      // Chase player (move toward player)
+      if(distToPlayer > 1.0){
+        moveX = (dx/distToPlayer) * m.speed * 0.7 * dt;
+        moveZ = (dz/distToPlayer) * m.speed * 0.7 * dt;
+      }
+    }
+    
+    // Apply movement with wall collision
+    if(moveX !== 0 || moveZ !== 0){
+      const nx = mPos.x + moveX;
+      const nz = mPos.z + moveZ;
+      if(!checkCollision(nx, mPos.z)) mPos.x = nx;
+      if(!checkCollision(mPos.x, nz)) mPos.z = nz;
+    }
+    
+    // Bob animation
+    m.group.position.y = Math.sin(Date.now() * 0.003 + monsters.indexOf(m)) * 0.1;
+  }
+}
+
+function checkPlayerAttackMonster(){
+  if(!charGroup) return;
+  const playerPos = charGroup.position;
+  for(const m of monsters){
+    const dx = playerPos.x - m.group.position.x;
+    const dz = playerPos.z - m.group.position.z;
+    const dist = Math.sqrt(dx*dx + dz*dz);
+    if(dist < 4.0){
+      // Knock back monster
+      const kbDir = new THREE.Vector3(-dx, 0, -dz).normalize();
+      m.group.position.x += kbDir.x * 1.5;
+      m.group.position.z += kbDir.z * 1.5;
+      // Player gains time
+      const timeBonus = Math.max(1, 3 - currentLevel * 0.2);
+      startTime += timeBonus * 1000; // shift startTime forward to reduce elapsed
+      // Effects
+      const midPoint = new THREE.Vector3(
+        (playerPos.x + m.group.position.x)/2,
+        0.8,
+        (playerPos.z + m.group.position.z)/2
+      );
+      createHitSparks(midPoint);
+      showFloatingText('+' + timeBonus.toFixed(0) + 's', '#44ff44');
+      showBarFloatingText('+' + timeBonus.toFixed(0) + 's', '#44ff44');
+      break; // only hit one monster per attack
+    }
+  }
+}
+
+function monsterAttackPlayer(monster){
+  if(!charGroup || !gameRunning || gameEnded) return;
+  // Can't attack if player is jumping over (above monster head height ~1.5)
+  if(charGroup.position.y > 1.2) return;
+  
+  // Monster weapon swing animation
+  const weapon = monster.group.userData.weapon;
+  if(weapon){
+    weapon.rotation.z = -1.5; // wind up
+    setTimeout(()=>{ if(weapon) weapon.rotation.z = 0.8; }, 150); // swing
+    setTimeout(()=>{ if(weapon) weapon.rotation.z = -0.3; }, 400); // reset
+  }
+  
+  // Play hurt animation on player (speed up to ~1 second)
+  charAnimState = 'attack'; // prevent other anims from interrupting
+  const hurtName = hurtAnims[Math.floor(Math.random()*hurtAnims.length)];
+  playAnimation(hurtName, false, ()=>{
+    if(gameEnded) return; // don't touch animations after win/fail
+    charAnimState = 'idle';
+    if(currentAction){ currentAction.fadeOut(0.3); currentAction = null; }
+  });
+  // Speed up hurt animation (original 5s → 1s)
+  if(animations[hurtName]) animations[hurtName].timeScale = 5;
+  playSfx('hurt');
+  // Player loses time
+  const timePenalty = 2 + currentLevel * 0.3;
+  startTime -= timePenalty * 1000;
+  // Effects
+  const midPoint = new THREE.Vector3(
+    (charGroup.position.x + monster.group.position.x)/2,
+    0.8,
+    (charGroup.position.z + monster.group.position.z)/2
+  );
+  createHitSparks(midPoint);
+  showFloatingText('-' + timePenalty.toFixed(0) + 's', '#ff4444');
+  showBarFloatingText('-' + timePenalty.toFixed(0) + 's', '#ff4444');
+}
+
+function createHitSparks(position){
+  const sparkCount = 12;
+  const sparks = [];
+  const sparkGroup = new THREE.Group();
+  sparkGroup.position.copy(position);
+  for(let i = 0; i < sparkCount; i++){
+    const mat = new THREE.MeshBasicMaterial({
+      color: Math.random() > 0.5 ? 0xffaa00 : 0xffff00,
+      transparent: true, opacity: 1
+    });
+    const spark = new THREE.Mesh(new THREE.SphereGeometry(0.04, 4, 4), mat);
+    const angle = Math.random() * Math.PI * 2;
+    const elev = Math.random() * Math.PI - Math.PI/2;
+    const speed = 2 + Math.random() * 3;
+    spark.userData.vel = new THREE.Vector3(
+      Math.cos(angle)*Math.cos(elev)*speed,
+      Math.sin(elev)*speed + 2,
+      Math.sin(angle)*Math.cos(elev)*speed
+    );
+    spark.userData.mat = mat;
+    sparkGroup.add(spark);
+    sparks.push(spark);
+  }
+  scene.add(sparkGroup);
+  const startT = Date.now();
+  const duration = 500;
+  function animateSparks(){
+    const t = (Date.now() - startT) / duration;
+    if(t >= 1){ scene.remove(sparkGroup); return; }
+    const dt2 = 0.016;
+    for(const sp of sparks){
+      sp.position.x += sp.userData.vel.x * dt2;
+      sp.position.y += sp.userData.vel.y * dt2;
+      sp.position.z += sp.userData.vel.z * dt2;
+      sp.userData.vel.y -= 9.8 * dt2;
+      sp.userData.mat.opacity = 1 - t;
+    }
+    requestAnimationFrame(animateSparks);
+  }
+  animateSparks();
+}
+
+function showFloatingText(text, color){
+  const el = document.createElement('div');
+  el.className = 'float-text';
+  el.textContent = text;
+  el.style.color = color;
+  el.style.textShadow = `0 0 6px ${color}`;
+  // Project character world position to screen
+  if(charGroup && camera){
+    const pos = charGroup.position.clone();
+    pos.y += 2.2;
+    pos.project(camera);
+    const w = getW(), h = getH();
+    const sx = (pos.x * 0.5 + 0.5) * w;
+    const sy = (-pos.y * 0.5 + 0.5) * h;
+    el.style.left = sx + 'px';
+    el.style.top = sy + 'px';
+  } else {
+    el.style.left = '50%';
+    el.style.top = '40%';
+  }
+  document.getElementById('game-root').appendChild(el);
+  setTimeout(()=> el.remove(), 1300);
+}
+
+// Show +/- floating text at the progress bar fill edge
+function showBarFloatingText(text, color){
+  const bar = document.getElementById('star-bar-fill');
+  if(!bar) return;
+  const el = document.createElement('div');
+  el.className = 'float-text';
+  el.textContent = text;
+  el.style.color = color;
+  el.style.textShadow = `0 0 6px ${color}`;
+  el.style.fontSize = '0.85rem';
+  // Position below the bar at the current fill edge
+  const barRect = bar.getBoundingClientRect();
+  const rootRect = document.getElementById('game-root').getBoundingClientRect();
+  el.style.left = (barRect.right - rootRect.left - 10) + 'px';
+  el.style.top = (barRect.bottom - rootRect.top + 4) + 'px';
+  document.getElementById('game-root').appendChild(el);
+  setTimeout(()=> el.remove(), 1300);
+}
+
+// ===== COLLISION =====
+function checkCollision(nx, nz){
+  // Grid-based collision using maze data directly
+  const r = 0.55;
+  const size = LEVELS[currentLevel].size;
+  
+  // Check all 4 corners of the player's bounding circle
+  const checks = [
+    {x: nx+r, z: nz},
+    {x: nx-r, z: nz},
+    {x: nx, z: nz+r},
+    {x: nx, z: nz-r},
+    {x: nx+r*0.7, z: nz+r*0.7},
+    {x: nx-r*0.7, z: nz+r*0.7},
+    {x: nx+r*0.7, z: nz-r*0.7},
+    {x: nx-r*0.7, z: nz-r*0.7}
+  ];
+  
+  for(const pt of checks){
+    // Which cell is this point in?
+    const col = Math.floor(pt.x / CELL_SIZE);
+    const row = Math.floor(pt.z / CELL_SIZE);
+    
+    // Out of bounds = wall
+    if(col < 0 || col >= size || row < 0 || row >= size) return true;
+    
+    // Check if crossing a wall boundary
+    const cellX = pt.x - col * CELL_SIZE; // position within cell (0 to CELL_SIZE)
+    const cellZ = pt.z - row * CELL_SIZE;
+    
+    const cell = maze[row][col];
+    const wallMargin = 0.4;
+    
+    // Near north wall of this cell
+    if(cellZ < wallMargin && cell.walls.N) return true;
+    // Near south wall
+    if(cellZ > CELL_SIZE - wallMargin && cell.walls.S) return true;
+    // Near west wall
+    if(cellX < wallMargin && cell.walls.W) return true;
+    // Near east wall
+    if(cellX > CELL_SIZE - wallMargin && cell.walls.E) return true;
+  }
+  return false;
+}
+
+// ===== CAMERA =====
+function updateCamera(){
+  if(!charGroup) return;
+  const px = charGroup.position.x, pz = charGroup.position.z;
+  const eyeY = charGroup.position.y + 1.8;
+
+  // Camera behind player
+  const camX = px - Math.sin(camYaw) * CAM_DIST;
+  const camZ = pz - Math.cos(camYaw) * CAM_DIST;
+  const camY = eyeY + camPitch * CAM_DIST;
+
+  const desired = new THREE.Vector3(camX, camY, camZ);
+  const playerPos = new THREE.Vector3(px, eyeY, pz);
+
+  // Anti-occlusion raycast
+  const dir = desired.clone().sub(playerPos).normalize();
+  const maxDist = desired.distanceTo(playerPos);
+  raycaster.set(playerPos, dir);
+  const hits = raycaster.intersectObjects(wallMeshes, false);
+
+  let actualDist = maxDist;
+  if(hits.length > 0 && hits[0].distance < maxDist){
+    actualDist = Math.max(CAM_MIN_DIST, hits[0].distance - 0.3);
+  }
+
+  const finalPos = playerPos.clone().add(dir.multiplyScalar(actualDist));
+  finalPos.y = Math.max(1.0, finalPos.y);
+
+  camera.position.lerp(finalPos, 0.4);
+
+  // Look ahead of player
+  const lookAtX = px + Math.sin(camYaw) * 2;
+  const lookAtZ = pz + Math.cos(camYaw) * 2;
+  camera.lookAt(lookAtX, eyeY - 0.3, lookAtZ);
+}
+
+// ===== MINIMAP =====
+function getPlayerCell(){
+  if(!charGroup) return {r:0,c:0};
+  const size = LEVELS[currentLevel].size;
+  return {
+    r: Math.max(0, Math.min(size-1, Math.floor(charGroup.position.z/CELL_SIZE))),
+    c: Math.max(0, Math.min(size-1, Math.floor(charGroup.position.x/CELL_SIZE)))
+  };
+}
+
+function drawMinimap(showAll){
+  const canvas = document.getElementById('minimap');
+  const ctx2 = canvas.getContext('2d');
+  const size = LEVELS[currentLevel].size;
+  const W = canvas.width, H = canvas.height, s = W/size;
+
+  ctx2.clearRect(0,0,W,H);
+  const skin = LEVELS[currentLevel].skin;
+  ctx2.fillStyle = skin==='forest'?'#1a3a15':skin==='desert'?'#4a3515':'#080810';
+  ctx2.fillRect(0,0,W,H);
+
+  const pc = getPlayerCell();
+  // Fog radius scales with level difficulty (smaller radius for harder levels)
+  const fogR = currentLevel < 3 ? 1.5 : 1;
+
+  for(let r=0;r<size;r++){
+    for(let c=0;c<size;c++){
+      const x=c*s, y=r*s;
+      const dist = Math.abs(r-pc.r)+Math.abs(c-pc.c);
+      const isGoal = (r===size-1 && c===size-1);
+      // ONLY current position radius is visible (no visited memory)
+      const isVisible = showAll || dist<=fogR;
+      // Goal is shown as a dim marker always
+      const showGoalHint = isGoal && !showAll;
+
+      if(!isVisible && !showGoalHint){
+        // Fully dark
+        continue;
+      }
+
+      if(showGoalHint && !isVisible){
+        // Show goal as a faint blinking dot only
+        ctx2.fillStyle = `rgba(0,220,100,${0.3+Math.sin(Date.now()/300)*0.15})`;
+        ctx2.beginPath();ctx2.arc(x+s/2,y+s/2,s/3,0,Math.PI*2);ctx2.fill();
+        continue;
+      }
+
+      // Brightness fades with distance from player
+      const brightness = showAll ? 1 : Math.max(0.2, 1 - dist/fogR * 0.5);
+      
+      // Cell background
+      ctx2.fillStyle = `rgba(200,200,180,${brightness*0.35})`;
+      ctx2.fillRect(x+1,y+1,s-2,s-2);
+
+      // Goal marker
+      if(isGoal){
+        ctx2.fillStyle = `rgba(0,220,100,${brightness*0.6})`;
+        ctx2.fillRect(x+2,y+2,s-4,s-4);
+      }
+
+      // Walls - bright white, thick for contrast
+      ctx2.strokeStyle = `rgba(255,255,255,${brightness})`;
+      ctx2.lineWidth = showAll ? 2 : 3;
+      ctx2.lineCap = 'round';
+      const cell = maze[r][c];
+      if(cell.walls.N){ctx2.beginPath();ctx2.moveTo(x,y);ctx2.lineTo(x+s,y);ctx2.stroke();}
+      if(cell.walls.S){ctx2.beginPath();ctx2.moveTo(x,y+s);ctx2.lineTo(x+s,y+s);ctx2.stroke();}
+      if(cell.walls.W){ctx2.beginPath();ctx2.moveTo(x,y);ctx2.lineTo(x,y+s);ctx2.stroke();}
+      if(cell.walls.E){ctx2.beginPath();ctx2.moveTo(x+s,y);ctx2.lineTo(x+s,y+s);ctx2.stroke();}
+    }
+  }
+
+  // Player dot with glow
+  if(charGroup){
+    const ppx = charGroup.position.x/CELL_SIZE*s;
+    const ppy = charGroup.position.z/CELL_SIZE*s;
+    // Glow
+    const grd = ctx2.createRadialGradient(ppx,ppy,0,ppx,ppy,s*fogR);
+    grd.addColorStop(0,'rgba(255,255,100,0.15)');
+    grd.addColorStop(1,'transparent');
+    ctx2.fillStyle = grd;
+    ctx2.fillRect(0,0,W,H);
+    // Dot
+    ctx2.fillStyle = '#ffff00';
+    ctx2.beginPath(); ctx2.arc(ppx,ppy,3,0,Math.PI*2); ctx2.fill();
+    // Direction indicator
+    ctx2.strokeStyle = '#ffff00'; ctx2.lineWidth = 1.5;
+    ctx2.beginPath(); ctx2.moveTo(ppx,ppy);
+    ctx2.lineTo(ppx+Math.sin(camYaw)*6, ppy+Math.cos(camYaw)*6); ctx2.stroke();
+  }
+
+  // Goal dot
+  const gx = (size-.5)*s, gy = (size-.5)*s;
+  ctx2.fillStyle = '#00ff66';
+  ctx2.beginPath(); ctx2.arc(gx,gy,4,0,Math.PI*2); ctx2.fill();
+}
+
+// ===== SCENE INIT =====
+function initScene(){
+  scene = new THREE.Scene();
+  const w = getW(), h = getH();
+  camera = new THREE.PerspectiveCamera(65, w/h, 0.1, 120);
+  renderer = new THREE.WebGLRenderer({canvas:document.getElementById('game-canvas'), antialias:true});
+  renderer.setSize(w,h);
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  renderer.shadowMap.enabled = true;
+  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  renderer.toneMapping = THREE.ACESFilmicToneMapping;
+  renderer.toneMappingExposure = 1.3;
+  raycaster = new THREE.Raycaster();
+  clock = new THREE.Clock();
+}
+
+function setupLighting(){
+  const skin = LEVELS[currentLevel].skin;
+  const colors = getSkinColors(skin);
+
+  scene.background = new THREE.Color(colors.sky);
+  if(skin === 'rainynight'){
+    scene.fog = new THREE.FogExp2(colors.fog, 0.06);
+  } else {
+    scene.fog = new THREE.Fog(colors.fog, colors.fogNear, colors.fogFar);
+  }
+
+  scene.add(new THREE.AmbientLight(colors.ambient, colors.ambInt));
+
+  const sun = new THREE.DirectionalLight(colors.sunColor, colors.sunInt);
+  sun.position.set(20, 30, 15);
+  sun.castShadow = true;
+  sun.shadow.mapSize.set(2048,2048);
+  sun.shadow.camera.near = 1; sun.shadow.camera.far = 100;
+  sun.shadow.camera.left = -60; sun.shadow.camera.right = 60;
+  sun.shadow.camera.top = 60; sun.shadow.camera.bottom = -60;
+  sun.shadow.bias = -0.001;
+  scene.add(sun);
+
+  scene.add(new THREE.HemisphereLight(colors.hemiSky, colors.hemiGround, 0.3));
+  
+  // Player follow spotlight (top-down stage light, especially useful in dark themes)
+  const spotIntensity = (skin === 'rainynight' || skin === 'underwater' || skin === 'city') ? 4 : 2;
+  const playerSpot = new THREE.SpotLight(0xffffff, spotIntensity, 18, Math.PI/4, 0.6, 1);
+  playerSpot.position.set(0, 10, 0);
+  playerSpot.castShadow = true;
+  playerSpot.shadow.mapSize.set(512, 512);
+  scene.add(playerSpot);
+  scene.add(playerSpot.target);
+  window._playerSpot = playerSpot;
+  
+  // Weather system
+  setupWeather(colors.weather);
+}
+
+// ===== WEATHER EFFECTS =====
+let rainParticles = null;
+let cloudMeshes = [];
+let lightningLight = null;
+let nextLightning = 0;
+
+function setupWeather(weather){
+  rainParticles = null; cloudMeshes = []; lightningLight = null;
+  const mazeW = LEVELS[currentLevel].size * CELL_SIZE;
+  const center = mazeW / 2;
+  
+  if(weather === 'sunny'){
+    // White fluffy clouds
+    const cloudMat = new THREE.MeshBasicMaterial({color:0xffffff, transparent:true, opacity:0.7});
+    for(let i = 0; i < 8; i++){
+      const w = 4 + Math.random()*6, h = 1.5 + Math.random()*1;
+      const cloud = new THREE.Mesh(new THREE.SphereGeometry(w, 8, 6), cloudMat);
+      cloud.scale.set(1, h/w, 0.6);
+      cloud.position.set(
+        center + (Math.random()-0.5)*mazeW*2,
+        18 + Math.random()*8,
+        center + (Math.random()-0.5)*mazeW*2
+      );
+      cloud.userData.speed = 0.3 + Math.random()*0.5;
+      scene.add(cloud);
+      cloudMeshes.push(cloud);
+    }
+  }
+  
+  if(weather === 'cloudy'){
+    // Dark heavy clouds
+    const cloudMat = new THREE.MeshBasicMaterial({color:0x555540, transparent:true, opacity:0.6});
+    for(let i = 0; i < 12; i++){
+      const w = 5 + Math.random()*8;
+      const cloud = new THREE.Mesh(new THREE.SphereGeometry(w, 7, 5), cloudMat);
+      cloud.scale.set(1, 0.3, 0.7);
+      cloud.position.set(
+        center + (Math.random()-0.5)*mazeW*2.5,
+        14 + Math.random()*6,
+        center + (Math.random()-0.5)*mazeW*2.5
+      );
+      cloud.userData.speed = 0.5 + Math.random()*0.8;
+      scene.add(cloud);
+      cloudMeshes.push(cloud);
+    }
+  }
+  
+  if(weather === 'storm'){
+    // Dark storm clouds
+    const cloudMat = new THREE.MeshBasicMaterial({color:0x222233, transparent:true, opacity:0.8});
+    for(let i = 0; i < 15; i++){
+      const w = 6 + Math.random()*10;
+      const cloud = new THREE.Mesh(new THREE.SphereGeometry(w, 6, 4), cloudMat);
+      cloud.scale.set(1, 0.25, 0.8);
+      cloud.position.set(
+        center + (Math.random()-0.5)*mazeW*2,
+        12 + Math.random()*5,
+        center + (Math.random()-0.5)*mazeW*2
+      );
+      cloud.userData.speed = 0.8 + Math.random()*1.2;
+      scene.add(cloud);
+      cloudMeshes.push(cloud);
+    }
+    
+    // Rain particles
+    const rainCount = 5000;
+    const rainGeo = new THREE.BufferGeometry();
+    const rainPositions = new Float32Array(rainCount * 3);
+    for(let i = 0; i < rainCount; i++){
+      rainPositions[i*3] = center + (Math.random()-0.5)*mazeW*1.5;
+      rainPositions[i*3+1] = Math.random()*20;
+      rainPositions[i*3+2] = center + (Math.random()-0.5)*mazeW*1.5;
+    }
+    rainGeo.setAttribute('position', new THREE.BufferAttribute(rainPositions, 3));
+    // Raindrop sprite (teardrop shape)
+    const rainCanvas = document.createElement('canvas');
+    rainCanvas.width = 16; rainCanvas.height = 32;
+    const rctx = rainCanvas.getContext('2d');
+    rctx.fillStyle = 'rgba(150,180,220,0.8)';
+    rctx.beginPath();
+    rctx.moveTo(8, 0);
+    rctx.quadraticCurveTo(16, 16, 8, 30);
+    rctx.quadraticCurveTo(0, 16, 8, 0);
+    rctx.fill();
+    const rainTex = new THREE.CanvasTexture(rainCanvas);
+    const rainMat = new THREE.PointsMaterial({map:rainTex, size:0.2, transparent:true, opacity:0.7, depthWrite:false});
+    rainParticles = new THREE.Points(rainGeo, rainMat);
+    scene.add(rainParticles);
+    
+    // Lightning light (flashes randomly)
+    lightningLight = new THREE.PointLight(0xccccff, 0, 100);
+    lightningLight.position.set(center, 20, center);
+    scene.add(lightningLight);
+    nextLightning = Date.now() + 2000 + Math.random()*4000;
+  }
+  
+  if(weather === 'snow'){
+    // Snowflakes - circular using sprite map
+    const snowCanvas = document.createElement('canvas');
+    snowCanvas.width = 32; snowCanvas.height = 32;
+    const sctx = snowCanvas.getContext('2d');
+    sctx.beginPath(); sctx.arc(16,16,14,0,Math.PI*2);
+    sctx.fillStyle = '#ffffff'; sctx.fill();
+    const snowTex = new THREE.CanvasTexture(snowCanvas);
+    
+    const snowCount = 3000;
+    const snowGeo = new THREE.BufferGeometry();
+    const snowPositions = new Float32Array(snowCount * 3);
+    for(let i = 0; i < snowCount; i++){
+      snowPositions[i*3] = center + (Math.random()-0.5)*mazeW*1.5;
+      snowPositions[i*3+1] = Math.random()*18;
+      snowPositions[i*3+2] = center + (Math.random()-0.5)*mazeW*1.5;
+    }
+    snowGeo.setAttribute('position', new THREE.BufferAttribute(snowPositions, 3));
+    const snowMat = new THREE.PointsMaterial({map:snowTex, size:0.25, transparent:true, opacity:0.85, depthWrite:false});
+    rainParticles = new THREE.Points(snowGeo, snowMat);
+    scene.add(rainParticles);
+    // Light gray clouds
+    const cloudMat = new THREE.MeshBasicMaterial({color:0xccccdd, transparent:true, opacity:0.5});
+    for(let i = 0; i < 8; i++){
+      const w = 5 + Math.random()*7;
+      const cloud = new THREE.Mesh(new THREE.SphereGeometry(w, 7, 5), cloudMat);
+      cloud.scale.set(1, 0.3, 0.7);
+      cloud.position.set(center+(Math.random()-0.5)*mazeW*2, 15+Math.random()*5, center+(Math.random()-0.5)*mazeW*2);
+      cloud.userData.speed = 0.2 + Math.random()*0.4;
+      scene.add(cloud); cloudMeshes.push(cloud);
+    }
+  }
+  
+  if(weather === 'bubbles'){
+    // Bubbles floating up - circular sprite, larger, transparent
+    const bubbleCanvas = document.createElement('canvas');
+    bubbleCanvas.width = 64; bubbleCanvas.height = 64;
+    const bctx = bubbleCanvas.getContext('2d');
+    // Transparent circle with rim highlight
+    bctx.beginPath(); bctx.arc(32,32,28,0,Math.PI*2);
+    bctx.strokeStyle = 'rgba(180,230,255,0.6)'; bctx.lineWidth = 3; bctx.stroke();
+    bctx.beginPath(); bctx.arc(32,32,28,0,Math.PI*2);
+    bctx.fillStyle = 'rgba(150,220,255,0.15)'; bctx.fill();
+    // Highlight spot
+    bctx.beginPath(); bctx.arc(22,22,6,0,Math.PI*2);
+    bctx.fillStyle = 'rgba(255,255,255,0.5)'; bctx.fill();
+    const bubbleTex = new THREE.CanvasTexture(bubbleCanvas);
+    
+    const bubbleCount = 1200;
+    const bubbleGeo = new THREE.BufferGeometry();
+    const bubblePositions = new Float32Array(bubbleCount * 3);
+    for(let i = 0; i < bubbleCount; i++){
+      bubblePositions[i*3] = center + (Math.random()-0.5)*mazeW*1.5;
+      bubblePositions[i*3+1] = Math.random()*15;
+      bubblePositions[i*3+2] = center + (Math.random()-0.5)*mazeW*1.5;
+    }
+    bubbleGeo.setAttribute('position', new THREE.BufferAttribute(bubblePositions, 3));
+    const bubbleMat = new THREE.PointsMaterial({map:bubbleTex, size:0.6, transparent:true, opacity:0.7, depthWrite:false});
+    rainParticles = new THREE.Points(bubbleGeo, bubbleMat);
+    rainParticles.userData.direction = 'up';
+    scene.add(rainParticles);
+  }
+}
+
+function updateWeather(dt){
+  // Move clouds
+  const mazeW = LEVELS[currentLevel].size * CELL_SIZE;
+  const center = mazeW / 2;
+  for(const cloud of cloudMeshes){
+    cloud.position.x += cloud.userData.speed * dt;
+    if(cloud.position.x > center + mazeW*1.5){
+      cloud.position.x = center - mazeW*1.5;
+    }
+  }
+  
+  // Rain / Snow / Bubbles
+  if(rainParticles){
+    const positions = rainParticles.geometry.attributes.position.array;
+    const isUp = rainParticles.userData.direction === 'up';
+    const isSnow = LEVELS[currentLevel] && getSkinColors(LEVELS[currentLevel].skin).weather === 'snow';
+    const speed = isSnow ? 3 : (isUp ? -4 : 15); // snow=slow, bubbles=up, rain=fast down
+    for(let i = 0; i < positions.length; i+=3){
+      if(isUp){
+        positions[i+1] += 4 * dt; // float up
+        positions[i] += (Math.random()-0.5)*0.3*dt; // slight horizontal drift
+        if(positions[i+1] > 18){
+          positions[i+1] = -1;
+          positions[i] = center + (Math.random()-0.5)*mazeW*1.5;
+          positions[i+2] = center + (Math.random()-0.5)*mazeW*1.5;
+        }
+      } else {
+        positions[i+1] -= speed * dt;
+        if(isSnow) positions[i] += (Math.random()-0.5)*0.5*dt; // snow drifts
+        if(positions[i+1] < 0){
+          positions[i+1] = 18 + Math.random()*5;
+          positions[i] = center + (Math.random()-0.5)*mazeW*1.5;
+          positions[i+2] = center + (Math.random()-0.5)*mazeW*1.5;
+        }
+      }
+    }
+    rainParticles.geometry.attributes.position.needsUpdate = true;
+  }
+  
+  // Lightning
+  if(lightningLight){
+    const now = Date.now();
+    if(now > nextLightning){
+      // Flash!
+      lightningLight.intensity = 8 + Math.random()*5;
+      lightningLight.position.set(
+        center + (Math.random()-0.5)*mazeW,
+        18,
+        center + (Math.random()-0.5)*mazeW
+      );
+      // Quick double flash
+      setTimeout(()=>{ if(lightningLight) lightningLight.intensity = 0; }, 80);
+      setTimeout(()=>{ if(lightningLight) lightningLight.intensity = 5; }, 150);
+      setTimeout(()=>{ if(lightningLight) lightningLight.intensity = 0; }, 200);
+      nextLightning = now + 3000 + Math.random()*6000;
+    }
+  }
+}
+
+// ===== PLAYER MOVEMENT =====
+function updatePlayer(dt){
+  if(!gameRunning || !charGroup) return;
+  const speed = isRunning ? 5.5 : 4;
+  let dx = 0, dz = 0;
+
+  if(Math.abs(moveDir.x) > .05 || Math.abs(moveDir.z) > .05){
+    // Forward = camYaw direction
+    const fwdX = Math.sin(camYaw);
+    const fwdZ = Math.cos(camYaw);
+    // Right = perpendicular
+    const rightX = Math.cos(camYaw);
+    const rightZ = -Math.sin(camYaw);
+
+    const inputFwd = -moveDir.z; // up on joystick = forward
+    const inputRight = -moveDir.x; // right on joystick = right
+
+    dx = (fwdX * inputFwd + rightX * inputRight) * speed * dt;
+    dz = (fwdZ * inputFwd + rightZ * inputRight) * speed * dt;
+
+    // Character faces movement direction
+    if(Math.abs(dx) > 0.001 || Math.abs(dz) > 0.001){
+      charGroup.rotation.y = Math.atan2(dx, dz);
+    }
+  }
+
+  // Collision with sub-stepping (same logic for walk and run)
+  const maxStep = 0.1; // max movement per step, ensures never skip wall
+  const totalDist = Math.sqrt(dx*dx + dz*dz);
+  const steps = Math.max(1, Math.ceil(totalDist / maxStep));
+  const stepDx = dx / steps, stepDz = dz / steps;
+  for(let s = 0; s < steps; s++){
+    const nx = charGroup.position.x + stepDx;
+    if(!checkCollision(nx, charGroup.position.z)) charGroup.position.x = nx;
+    const nz = charGroup.position.z + stepDz;
+    if(!checkCollision(charGroup.position.x, nz)) charGroup.position.z = nz;
+  }
+
+  // Gravity
+  playerVelocity.y += -22*dt;
+  charGroup.position.y += playerVelocity.y*dt;
+  if(charGroup.position.y <= 0){charGroup.position.y=0;playerVelocity.y=0;playerOnGround=true;}
+
+  // Bounds
+  const size = LEVELS[currentLevel].size;
+  charGroup.position.x = Math.max(.5, Math.min(size*CELL_SIZE-.5, charGroup.position.x));
+  charGroup.position.z = Math.max(.5, Math.min(size*CELL_SIZE-.5, charGroup.position.z));
+}
+
+// ===== GOAL CHECK =====
+function checkGoal(){
+  if(!goalMesh || !charGroup) return false;
+  const dx = charGroup.position.x - goalMesh.position.x;
+  const dz = charGroup.position.z - goalMesh.position.z;
+  return Math.sqrt(dx*dx+dz*dz) < 1.5;
+}
+
+// ===== TIMER =====
+function updateTimer(){
+  if(!gameRunning) return;
+  const lvl = LEVELS[currentLevel];
+  elapsed = (Date.now() - startTime)/1000;
+  const remaining = Math.max(0, lvl.time - elapsed);
+  const m = Math.floor(remaining/60).toString().padStart(2,'0');
+  const s = Math.floor(remaining%60).toString().padStart(2,'0');
+  const timerEl = document.getElementById('timer');
+  timerEl.textContent = `${m}:${s}`;
+
+  // Warning when less than 15s
+  if(remaining <= 15){
+    timerEl.classList.add('warning');
+  } else {
+    timerEl.classList.remove('warning');
+  }
+  
+  // Update star progress bar
+  updateStarBar(elapsed, lvl);
+
+  // Time's up
+  if(remaining <= 0){
+    failGame();
+  }
+}
+
+// ===== WIN =====
+function winGame(){
+  gameRunning = false;
+  gameEnded = true;
+  playSfx('win');
+  clearInterval(timerInterval);
+
+  const lvl = LEVELS[currentLevel];
+  let stars = 1;
+  if(elapsed <= lvl.star3) stars = 3;
+  else if(elapsed <= lvl.star2) stars = 2;
+
+  // Save progress
+  if(stars > progress.levels[currentLevel].stars){
+    progress.levels[currentLevel].stars = stars;
+    saveProgress();
+  }
+
+  hideGameUI();
+  
+  // === Create Victory Scene ===
+  setupResultScene('win');
+  
+  // FORCE victory animation - bypass playAnimation entirely
+  if(mixer){
+    mixer.stopAllAction();
+    mixer._listeners = {};
+    mixer._actions.forEach(a => { a.stop(); a.reset(); a.enabled = false; });
+  }
+  currentAction = null;
+  charAnimState = 'victory';
+  // Find Victory_Cheer animation (case-insensitive search as fallback)
+  let victoryAction = animations['Victory_Cheer'];
+  if(!victoryAction){
+    // Try to find by partial name match
+    for(const key of Object.keys(animations)){
+      if(key.toLowerCase().includes('victory') || key.toLowerCase().includes('cheer')){
+        victoryAction = animations[key]; break;
+      }
+    }
+  }
+  if(victoryAction){
+    victoryAction.stop();
+    victoryAction.reset();
+    victoryAction.setLoop(THREE.LoopRepeat);
+    victoryAction.setEffectiveWeight(1);
+    victoryAction.setEffectiveTimeScale(1);
+    victoryAction.enabled = true;
+    victoryAction.fadeIn(0);
+    victoryAction.play();
+    currentAction = victoryAction;
+  } else {
+    console.warn('Victory animation not found! Available:', Object.keys(animations));
+  }
+
+  // Show result modal after delay
+  setTimeout(()=>{
+    document.getElementById('result-title').textContent = `${t('level')} ${currentLevel+1} ${t('complete')}`;
+    document.getElementById('result-stars').textContent = '⭐'.repeat(stars) + '☆'.repeat(3-stars);
+    const m = Math.floor(elapsed/60).toString().padStart(2,'0');
+    const s = Math.floor(elapsed%60).toString().padStart(2,'0');
+    document.getElementById('result-info').textContent = `${t('time')}: ${m}:${s}`;
+
+    const btnNext = document.getElementById('btn-next');
+    btnNext.style.display = currentLevel < LEVELS.length - 1 ? '' : 'none';
+    btnNext.textContent = t('nextLevel');
+
+    // Update retry/home buttons
+    const resultBtns = document.querySelectorAll('#result-modal .result-bottom .btn-secondary');
+    if(resultBtns[0]) resultBtns[0].textContent = t('retry');
+    if(resultBtns[1]) resultBtns[1].textContent = t('home');
+
+    document.getElementById('result-modal').classList.remove('hidden');
+    spawnConfetti();
+  }, 1500);
+}
+
+// ===== FAIL =====
+function failGame(){
+  gameRunning = false;
+  gameEnded = true;
+  playSfx('fail');
+  clearInterval(timerInterval);
+  hideGameUI();
+  
+  // === Create Fail Scene ===
+  setupResultScene('fail');
+  
+  // FORCE fail animation - bypass playAnimation entirely
+  if(mixer){
+    mixer.stopAllAction();
+    mixer._listeners = {};
+    mixer._actions.forEach(a => { a.stop(); a.reset(); });
+  }
+  currentAction = null;
+  charAnimState = 'fail';
+  if(animations['Lie_Back_Leg_Swing']){
+    const action = animations['Lie_Back_Leg_Swing'];
+    action.stop();
+    action.reset();
+    action.setLoop(THREE.LoopRepeat);
+    action.setEffectiveWeight(1);
+    action.setEffectiveTimeScale(1);
+    action.enabled = true;
+    action.play();
+    currentAction = action;
+  }
+
+  setTimeout(()=>{
+    // Update fail modal text with i18n
+    const failH2 = document.querySelector('#fail-modal .result-top h2');
+    if(failH2) failH2.textContent = t('timesUp');
+    const failInfo = document.querySelector('#fail-modal .result-top .info');
+    if(failInfo) failInfo.textContent = t('timesUpSub');
+    const failRetry = document.querySelector('#fail-modal .result-bottom .btn-danger');
+    if(failRetry) failRetry.textContent = t('retry');
+    const failHome = document.querySelector('#fail-modal .result-bottom .btn-secondary');
+    if(failHome) failHome.textContent = t('home');
+    document.getElementById('fail-modal').classList.remove('hidden');
+    spawnFailEffect();
+  }, 1500);
+}
+
+// ===== RESULT SCENE (character center-stage) =====
+function setupResultScene(type){
+  // Stop ALL running animations completely
+  if(mixer){
+    mixer.stopAllAction();
+    currentAction = null;
+  }
+  // Remove everything except character
+  const toRemove = [];
+  scene.traverse((obj)=>{
+    if(obj !== scene && obj !== charGroup && !charGroup.getObjectById(obj.id)){
+      toRemove.push(obj);
+    }
+  });
+  for(const obj of toRemove) scene.remove(obj);
+  walls = []; wallMeshes = []; torchLights = []; cloudMeshes = [];
+  rainParticles = null; lightningLight = null;
+  // Remove monsters
+  for(const m of monsters) scene.remove(m.group);
+  monsters = [];
+  for(const c of coins){ scene.remove(c.mesh); if(c.glow) scene.remove(c.glow); }
+  coins = [];
+  
+  // Place character at origin, facing camera
+  charGroup.position.set(0, 0, 0);
+  charGroup.rotation.y = 0; // model's front is +Z, camera is at +Z looking back
+  
+  if(type === 'win'){
+    // Bright celebratory scene
+    scene.background = new THREE.Color(0x1a2a4a);
+    scene.fog = null;
+    
+    // Warm spotlight on character
+    const spot1 = new THREE.SpotLight(0xffd700, 3, 20, Math.PI/4, 0.5);
+    spot1.position.set(0, 8, 4);spot1.target.position.set(0,1,0);
+    scene.add(spot1);scene.add(spot1.target);
+    
+    const spot2 = new THREE.SpotLight(0x88aaff, 1.5, 15, Math.PI/3, 0.5);
+    spot2.position.set(-3, 6, -2);spot2.target.position.set(0,1,0);
+    scene.add(spot2);scene.add(spot2.target);
+    
+    scene.add(new THREE.AmbientLight(0x334466, 0.4));
+    
+    // Simple floor
+    const floor = new THREE.Mesh(
+      new THREE.CircleGeometry(4, 32),
+      new THREE.MeshStandardMaterial({color:0x2a3a5a, roughness:0.8})
+    );
+    floor.rotation.x = -Math.PI/2; floor.receiveShadow = true;
+    scene.add(floor);
+    
+    // Camera: pull back more to show smaller full body centered
+    camera.position.set(0, 1.3, 9);
+    camera.lookAt(0, 0.9, 0);
+    
+  } else {
+    // Dark somber scene
+    scene.background = new THREE.Color(0x0a0a12);
+    scene.fog = null;
+    
+    // Dim red-tinted light
+    const spot = new THREE.SpotLight(0xff4444, 2, 15, Math.PI/3, 0.6);
+    spot.position.set(2, 5, 2);spot.target.position.set(0,0.5,0);
+    scene.add(spot);scene.add(spot.target);
+    
+    scene.add(new THREE.AmbientLight(0x221111, 0.3));
+    
+    // Dark floor
+    const floor = new THREE.Mesh(
+      new THREE.CircleGeometry(3, 32),
+      new THREE.MeshStandardMaterial({color:0x1a1015, roughness:0.9})
+    );
+    floor.rotation.x = -Math.PI/2; floor.receiveShadow = true;
+    scene.add(floor);
+    
+    // Camera: 45-degree angle from head direction (character lies back)
+    camera.position.set(1.5, 2.5, 2.5);
+    camera.lookAt(0, 0.5, 0);
+  }
+}
+
+// ===== CONFETTI (win effect - ribbons + sparkles) =====
+function spawnConfetti(){
+  const container = document.getElementById('result-modal');
+  // Colorful ribbons
+  for(let i = 0; i < 80; i++){
+    const ribbon = document.createElement('div');
+    const hue = Math.random()*360;
+    const isRibbon = Math.random() > 0.4;
+    const w = isRibbon ? (3+Math.random()*4) : (5+Math.random()*5);
+    const h = isRibbon ? (12+Math.random()*10) : (5+Math.random()*5);
+    ribbon.style.cssText = `position:absolute;
+      width:${w}px;height:${h}px;
+      background:hsl(${hue},85%,${55+Math.random()*20}%);
+      left:${Math.random()*100}%;top:-20px;
+      border-radius:${isRibbon?'1px':'50%'};
+      opacity:0.9;
+      animation:confettiFall ${2+Math.random()*2.5}s cubic-bezier(.25,.46,.45,.94) forwards;
+      animation-delay:${Math.random()*0.8}s;
+      transform:rotate(${Math.random()*360}deg)`;
+    container.appendChild(ribbon);
+    setTimeout(()=>ribbon.remove(), 5000);
+  }
+  // Golden sparkles
+  for(let i = 0; i < 20; i++){
+    const spark = document.createElement('div');
+    spark.style.cssText = `position:absolute;
+      width:6px;height:6px;background:#ffd700;border-radius:50%;
+      left:${20+Math.random()*60}%;top:${20+Math.random()*40}%;
+      box-shadow:0 0 8px #ffd700,0 0 16px rgba(255,215,0,.5);
+      animation:sparkBurst 1s ease-out forwards;
+      animation-delay:${0.5+Math.random()*1}s;opacity:0`;
+    container.appendChild(spark);
+    setTimeout(()=>spark.remove(), 3000);
+  }
+}
+
+// ===== FAIL EFFECT (dark rain + skull particles) =====
+function spawnFailEffect(){
+  const container = document.getElementById('fail-modal');
+  // Red/dark particles drifting down
+  for(let i = 0; i < 30; i++){
+    const p = document.createElement('div');
+    const size = 3 + Math.random()*5;
+    p.style.cssText = `position:absolute;width:${size}px;height:${size}px;
+      background:rgba(${150+Math.random()*100},${Math.random()*30},${Math.random()*30},0.7);
+      border-radius:50%;
+      left:${Math.random()*100}%;top:${-10+Math.random()*20}%;
+      animation:failDrift ${2.5+Math.random()*2}s ease-in forwards;
+      animation-delay:${Math.random()*1}s`;
+    container.appendChild(p);
+    setTimeout(()=>p.remove(), 5000);
+  }
+  // Crack lines
+  for(let i = 0; i < 5; i++){
+    const crack = document.createElement('div');
+    const angle = -20+Math.random()*40;
+    crack.style.cssText = `position:absolute;
+      width:${40+Math.random()*60}px;height:2px;
+      background:linear-gradient(90deg,transparent,rgba(255,50,50,0.6),transparent);
+      left:${20+Math.random()*60}%;top:${30+Math.random()*40}%;
+      transform:rotate(${angle}deg);
+      animation:crackAppear 0.3s ease-out forwards;
+      animation-delay:${0.3+i*0.15}s;opacity:0`;
+    container.appendChild(crack);
+    setTimeout(()=>crack.remove(), 5000);
+  }
+}
+
+// ===== STAR PROGRESS BAR =====
+function updateStarBar(elapsed, lvl){
+  const fill = document.getElementById('star-bar-fill');
+  const mark3 = document.getElementById('mark-star3');
+  const mark2 = document.getElementById('mark-star2');
+  const mark1 = document.getElementById('mark-star1');
+  
+  // Fill shrinks as time passes (100% at start → 0% at time up)
+  const pct = Math.min(100, (elapsed / lvl.time) * 100);
+  fill.style.width = Math.max(0, 100 - pct) + '%';
+  
+  // Dim stars when no longer achievable - show correct star count per node
+  if(elapsed > lvl.star3){
+    mark3.textContent = '☆☆☆'; mark3.classList.add('dimmed');
+  } else {
+    mark3.textContent = '⭐⭐⭐'; mark3.classList.remove('dimmed');
+  }
+  if(elapsed > lvl.star2){
+    mark2.textContent = '☆☆'; mark2.classList.add('dimmed');
+  } else {
+    mark2.textContent = '⭐⭐'; mark2.classList.remove('dimmed');
+  }
+}
+
+function initStarBar(){
+  const lvl = LEVELS[currentLevel];
+  const mark3 = document.getElementById('mark-star3');
+  const mark2 = document.getElementById('mark-star2');
+  const mark1 = document.getElementById('mark-star1');
+  const fill = document.getElementById('star-bar-fill');
+  
+  // Set positions and content instantly (no transitions in CSS)
+  mark3.style.left = ((1 - lvl.star3 / lvl.time) * 100) + '%';
+  mark2.style.left = ((1 - lvl.star2 / lvl.time) * 100) + '%';
+  mark1.style.left = '0%';
+  mark3.textContent = '⭐⭐⭐'; mark2.textContent = '⭐⭐'; mark1.textContent = '⭐';
+  mark3.classList.remove('dimmed'); mark2.classList.remove('dimmed');
+  fill.style.width = '100%';
+}
+
+// ===== HOW MODAL =====
+window.showHowModal = function(){
+  gameRunning = false;
+  document.getElementById('how-modal').classList.remove('hidden');
+  // Update i18n text
+  const howH2 = document.querySelector('#how-modal .how-header h2');
+  if(howH2) howH2.textContent = t('howToPlay');
+  const gotItBtn = document.querySelector('#how-modal .btn-primary');
+  if(gotItBtn) gotItBtn.textContent = t('gotIt');
+  const howCardTitles = document.querySelectorAll('#how-modal .how-card-title');
+  const titleKeys = ['findExit','starRating','controls','monsterCombat','minimap','themes'];
+  howCardTitles.forEach((el, i) => { if(titleKeys[i]) el.textContent = t(titleKeys[i]); });
+  // How-to-play card descriptions
+  const hfd2 = document.getElementById('help-find-desc');
+  if(hfd2) hfd2.innerHTML = t('helpFind');
+  const hft2 = document.getElementById('help-find-tip');
+  if(hft2) hft2.textContent = t('helpFindTip');
+  const hsd2 = document.getElementById('help-star-desc');
+  if(hsd2) hsd2.innerHTML = `${t('helpStar3')}<br>${t('helpStar2')}<br>${t('helpStar1')}`;
+  const hst2 = document.getElementById('help-star-tip');
+  if(hst2) hst2.textContent = t('helpStarTip');
+  const hcd2 = document.getElementById('help-ctrl-desc');
+  if(hcd2) hcd2.innerHTML = `<b>${t('helpCtrlJoy')}</b><br><b>${t('helpCtrlSwipe')}</b><br><b>${t('helpCtrlBeat')}</b><br><b>${t('helpCtrlJump')}</b><br><b>${t('helpCtrlRun')}</b>`;
+  const hmd2 = document.getElementById('help-monster-desc');
+  if(hmd2) hmd2.innerHTML = `<span style="color:#ff6666">${t('helpMonsterHit')}</span><br><span style="color:#66ff66">${t('helpMonsterBeat')}</span><br><span style="color:#66ccff">${t('helpMonsterJump')}</span><br><span style="opacity:.7;font-size:.65rem">${t('helpMonsterCombo')}</span>`;
+  const hmpd2 = document.getElementById('help-map-desc');
+  if(hmpd2) hmpd2.innerHTML = `<span style="color:#ffff00">● ${t('helpMapYellow')}</span><br><span style="color:#00ff88">● ${t('helpMapGreen')}</span><br><span style="opacity:.7;font-size:.65rem">${t('helpMapFog')}</span>`;
+  const htd2 = document.getElementById('help-theme-desc');
+  if(htd2) htd2.textContent = t('helpThemes');
+  const slider = document.getElementById('how-slider');
+  const dots = document.getElementById('how-dots');
+  const cardCount = slider.querySelectorAll('.how-card').length;
+  dots.innerHTML = '';
+  for(let i = 0; i < cardCount; i++){
+    const dot = document.createElement('div');
+    dot.className = 'how-dot' + (i===0?' active':'');
+    dots.appendChild(dot);
+  }
+  slider.scrollLeft = 0;
+  
+  // Dot update on scroll
+  slider.onscroll = ()=>{
+    const idx = Math.round(slider.scrollLeft / slider.offsetWidth);
+    dots.querySelectorAll('.how-dot').forEach((d,i)=>d.classList.toggle('active',i===idx));
+  };
+  
+  // JS-based card-by-card snap (handles CSS rotation)
+  let snapTouchId=null, snapStartX=0, snapStartScroll=0;
+  slider.ontouchstart=(e)=>{
+    const t=e.touches[0];
+    snapTouchId=t.identifier;
+    const tp=transformTouch(t.clientX,t.clientY);
+    snapStartX=tp.x;
+    snapStartScroll=slider.scrollLeft;
+  };
+  slider.ontouchmove=(e)=>{
+    for(let i=0;i<e.touches.length;i++){
+      if(e.touches[i].identifier===snapTouchId){
+        const tp=transformTouch(e.touches[i].clientX,e.touches[i].clientY);
+        slider.scrollLeft=snapStartScroll-(tp.x-snapStartX);
+        break;
+      }
+    }
+  };
+  slider.ontouchend=(e)=>{
+    const tp=transformTouch(e.changedTouches[0].clientX,e.changedTouches[0].clientY);
+    const dx=tp.x-snapStartX;
+    const w=slider.offsetWidth;
+    const currentCard=Math.round(snapStartScroll/w);
+    let targetCard=currentCard;
+    if(dx<-40) targetCard=Math.min(cardCount-1,currentCard+1);
+    else if(dx>40) targetCard=Math.max(0,currentCard-1);
+    slider.scrollTo({left:targetCard*w,behavior:'smooth'});
+    snapTouchId=null;
+  };
+  
+  // Theme carousel - render theme previews and auto-rotate
+  const carousel = document.getElementById('theme-carousel');
+  const themes = ['forest','desert','rainynight','classroom','stadium','snow','factory','beach','underwater','city'];
+  const themeLabels = ['Forest','Desert','Rainy Night','Classroom','Stadium','Snow','Factory','Beach','Ocean','City'];
+  carousel.innerHTML = '';
+  for(let i=0;i<themes.length;i++){
+    const slide = document.createElement('div');
+    slide.style.cssText = 'flex:0 0 100%;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px';
+    const cv = document.createElement('canvas');
+    cv.width = 140; cv.height = 60;
+    const ctx = cv.getContext('2d');
+    const wallTex = createWallTexture(themes[i]);
+    const floorTex = createFloorTexture(themes[i]);
+    ctx.drawImage(floorTex, 0, 30, 140, 30);
+    ctx.drawImage(wallTex, 0, 0, 140, 32);
+    cv.style.cssText = 'border-radius:6px;border:1px solid rgba(255,255,255,.2)';
+    slide.appendChild(cv);
+    const label = document.createElement('div');
+    label.textContent = themeLabels[i];
+    label.style.cssText = 'font-size:.6rem;color:#ffd700;font-weight:700';
+    slide.appendChild(label);
+    carousel.appendChild(slide);
+  }
+  let carouselIdx = 0;
+  const carouselInterval = setInterval(()=>{
+    carouselIdx = (carouselIdx+1) % themes.length;
+    carousel.style.transform = `translateX(-${carouselIdx*100}%)`;
+  }, 2000);
+  // Store interval to clear on close
+  window._carouselInterval = carouselInterval;
+};
+window.hideHowModal = function(){
+  document.getElementById('how-modal').classList.add('hidden');
+  if(window._carouselInterval) clearInterval(window._carouselInterval);
+  gameRunning = true;
+};
+
+// Sound toggle
+let soundEnabled = true;
+let audioCtx = null;
+
+function getAudioCtx(){
+  if(!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  return audioCtx;
+}
+
+// Simple synth sound effects
+function playSfx(type){
+  if(!soundEnabled) return;
+  const ctx = getAudioCtx();
+  const now = ctx.currentTime;
+  
+  if(type === 'jump'){
+    // Bright pop-up chirp
+    const osc = ctx.createOscillator(); const g = ctx.createGain();
+    osc.connect(g); g.connect(ctx.destination);
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(800, now);
+    osc.frequency.exponentialRampToValueAtTime(1400, now+0.1);
+    g.gain.setValueAtTime(0.2, now); g.gain.exponentialRampToValueAtTime(0.01, now+0.15);
+    osc.start(now); osc.stop(now+0.15);
+  } else if(type === 'attack'){
+    // Quick whoosh + impact
+    const osc = ctx.createOscillator(); const g = ctx.createGain();
+    const noise = ctx.createOscillator(); const ng = ctx.createGain();
+    osc.connect(g); g.connect(ctx.destination);
+    noise.connect(ng); ng.connect(ctx.destination);
+    osc.type = 'triangle'; osc.frequency.setValueAtTime(600, now);
+    osc.frequency.exponentialRampToValueAtTime(200, now+0.08);
+    g.gain.setValueAtTime(0.2, now); g.gain.exponentialRampToValueAtTime(0.01, now+0.1);
+    noise.type = 'sawtooth'; noise.frequency.setValueAtTime(80, now);
+    ng.gain.setValueAtTime(0.15, now); ng.gain.exponentialRampToValueAtTime(0.01, now+0.06);
+    osc.start(now); osc.stop(now+0.1);
+    noise.start(now); noise.stop(now+0.06);
+  } else if(type === 'hurt'){
+    // Descending buzz
+    const osc = ctx.createOscillator(); const g = ctx.createGain();
+    osc.connect(g); g.connect(ctx.destination);
+    osc.type = 'triangle'; osc.frequency.setValueAtTime(500, now);
+    osc.frequency.exponentialRampToValueAtTime(150, now+0.2);
+    g.gain.setValueAtTime(0.2, now); g.gain.exponentialRampToValueAtTime(0.01, now+0.25);
+    osc.start(now); osc.stop(now+0.25);
+  } else if(type === 'run'){
+    // Light swift tap
+    const osc = ctx.createOscillator(); const g = ctx.createGain();
+    osc.connect(g); g.connect(ctx.destination);
+    osc.type = 'sine'; osc.frequency.setValueAtTime(900, now);
+    osc.frequency.exponentialRampToValueAtTime(1200, now+0.06);
+    g.gain.setValueAtTime(0.12, now); g.gain.exponentialRampToValueAtTime(0.01, now+0.08);
+    osc.start(now); osc.stop(now+0.08);
+  } else if(type === 'win'){
+    // Bright celebratory fanfare (multi-note)
+    const notes = [784, 988, 1175, 1318, 1568]; // G5 B5 D6 E6 G6
+    notes.forEach((freq, i) => {
+      const osc = ctx.createOscillator(); const g = ctx.createGain();
+      osc.connect(g); g.connect(ctx.destination);
+      osc.type = 'sine';
+      osc.frequency.value = freq;
+      const t = now + i * 0.1;
+      g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(0.2, t+0.02);
+      g.gain.exponentialRampToValueAtTime(0.01, t+0.3);
+      osc.start(t); osc.stop(t+0.3);
+    });
+  } else if(type === 'fail'){
+    // Descending sad tones
+    const notes = [400, 350, 280, 200];
+    notes.forEach((freq, i) => {
+      const osc = ctx.createOscillator(); const g = ctx.createGain();
+      osc.connect(g); g.connect(ctx.destination);
+      osc.type = 'triangle';
+      osc.frequency.value = freq;
+      const t = now + i * 0.15;
+      g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(0.18, t+0.02);
+      g.gain.exponentialRampToValueAtTime(0.01, t+0.3);
+      osc.start(t); osc.stop(t+0.35);
+    });
+  }
+}
+
+let bgmAudio = null;
+
+function startBGM(){
+  if(!soundEnabled) return;
+  if(bgmAudio) { bgmAudio.play(); return; }
+  bgmAudio = new Audio('bgm.mp3');
+  bgmAudio.loop = true;
+  bgmAudio.volume = 0.15;
+  bgmAudio.play().catch(()=>{});
+}
+
+function stopBGM(){
+  if(bgmAudio){ bgmAudio.pause(); bgmAudio.currentTime = 0; }
+}
+
+window.toggleSound = function(){
+  soundEnabled = !soundEnabled;
+  const opacity = soundEnabled ? '1' : '0.4';
+  const btn = document.getElementById('btn-sound');
+  const btnGame = document.getElementById('btn-sound-game');
+  if(btn) btn.style.opacity = opacity;
+  if(btnGame) btnGame.style.opacity = opacity;
+  if(!soundEnabled){ stopBGM(); }
+  else { startBGM(); }
+};
+
+function hideGameUI(){
+  document.getElementById('hud').classList.add('hidden');
+  document.getElementById('controls').classList.add('hidden');
+  document.getElementById('minimap-wrap').classList.add('hidden');
+}
+
+function showGameUI(){
+  document.getElementById('hud').classList.remove('hidden');
+  document.getElementById('controls').classList.remove('hidden');
+  document.getElementById('minimap-wrap').classList.remove('hidden');
+  // Show theme switch button only on level 1
+  const themeBtn = document.getElementById('btn-theme-switch');
+  if(currentLevel === 0){
+    themeBtn.style.display = '';
+    // First time bubble tip
+    if(!window._themeTipShown){
+      window._themeTipShown = true;
+      const tip = document.createElement('div');
+      tip.style.cssText = 'position:absolute;top:130px;left:8px;z-index:200;background:linear-gradient(135deg,#fff8d0,#ffe066);color:#5a4000;padding:6px 10px;border-radius:10px;font-size:.6rem;font-weight:600;white-space:nowrap;box-shadow:0 2px 8px rgba(0,0,0,.3);animation:bubbleHop 1.5s infinite';
+      tip.textContent = '🎨 ' + t('switchTheme');
+      tip.innerHTML += '<div style="position:absolute;top:-6px;left:50px;border:6px solid transparent;border-bottom-color:#ffe066"></div>';
+      document.getElementById('game-root').appendChild(tip);
+      setTimeout(()=>tip.remove(), 6000);
+    }
+  } else {
+    themeBtn.style.display = 'none';
+  }
+}
+
+// ===== GAME FLOW =====
+async function startLevel(idx){
+  currentLevel = idx;
+  document.getElementById('level-screen').classList.add('hidden');
+  document.getElementById('result-modal').classList.add('hidden');
+  document.getElementById('fail-modal').classList.add('hidden');
+
+  // Show loading cover immediately (theme-colored, hides everything)
+  const cover = document.getElementById('loading-cover');
+  const skinColors = getSkinColors(LEVELS[idx].skin);
+  const bgHex = '#' + new THREE.Color(skinColors.sky).getHexString();
+  cover.style.background = bgHex;
+  cover.textContent = t('loading');
+  cover.classList.remove('hidden');
+
+  // Wait one frame so cover is painted before heavy work
+  await new Promise(r => requestAnimationFrame(()=>requestAnimationFrame(r)));
+
+  // Clear scene
+  while(scene.children.length > 0) scene.remove(scene.children[0]);
+  walls = []; wallMeshes = []; visitedCells = new Set(); torchLights = [];
+  mixer = null; animations = {}; currentAction = null; charAnimState = 'idle';
+  gameEnded = false;
+  monsters = [];
+
+  setupLighting();
+  buildMaze3D();
+  await buildCharacter();
+  spawnMonsters();
+  spawnCoins();
+
+  camYaw = 0; camPitch = 0.3;
+  playerVelocity.set(0,0,0); playerOnGround = true;
+  moveDir = {x:0,z:0}; isRunning = false; isPunching = false;
+  animTime = 0;
+
+  // Position camera
+  camera.position.set(
+    charGroup.position.x - Math.sin(camYaw)*CAM_DIST,
+    3,
+    charGroup.position.z - Math.cos(camYaw)*CAM_DIST
+  );
+  updateCamera();
+
+  // Hide loading cover, show map preview
+  cover.classList.add('hidden');
+
+  // Map preview phase - show map immediately with dark bg (no 3D flash)
+  const mmWrap = document.getElementById('minimap-wrap');
+  const mm = document.getElementById('minimap');
+  mm.style.width = '240px'; mm.style.height = '240px';
+  mm.width = 240; mm.height = 240;
+  mmWrap.classList.remove('hidden','shrink');
+  mmWrap.classList.add('fullscreen');
+  mmWrap.style.background = 'rgba(0,0,0,0.95)';
+  drawMinimap(true);
+
+  // Show map for 2 seconds then start game (no visible countdown number)
+  const cd = document.getElementById('countdown');
+  cd.classList.add('hidden');
+  setTimeout(()=>{
+    cd.textContent = 'GO!';
+    cd.classList.remove('hidden');
+    setTimeout(()=>{
+      cd.classList.add('hidden');
+      mmWrap.style.background = 'transparent';
+      mmWrap.classList.remove('fullscreen');
+      mmWrap.classList.add('shrink');
+      mm.style.width = '90px'; mm.style.height = '90px';
+      mm.width = 200; mm.height = 200;
+      initStarBar();
+      // Show level + theme label
+      
+      document.getElementById('level-label').textContent = `${t('level')} ${currentLevel+1} · ${t(LEVELS[currentLevel].skin)}`;
+      showGameUI();
+      gameRunning = true;
+      startBGM();
+      startTime = Date.now();
+      elapsed = 0;
+      timerInterval = setInterval(updateTimer, 100);
+      setTimeout(()=> mmWrap.classList.remove('shrink'), 700);
+    }, 400);
+  }, 2000);
+}
+
+// ===== GLOBAL HANDLERS =====
+window.selectLevel = function(idx){
+  if(!isLevelUnlocked(idx)) return;
+  startLevel(idx);
+};
+
+window.nextLevel = function(){
+  if(currentLevel < LEVELS.length -1){
+    startLevel(currentLevel + 1);
+  } else {
+    goHome();
+  }
+};
+
+window.retryLevel = function(){
+  document.getElementById('result-modal').classList.add('hidden');
+  document.getElementById('fail-modal').classList.add('hidden');
+  startLevel(currentLevel);
+};
+
+window.goHome = function(){
+  // If game is running, show confirmation
+  if(gameRunning && !gameEnded){
+    gameRunning = false;
+    const modal = document.createElement('div');
+    modal.id = 'quit-modal';
+    modal.style.cssText = 'position:absolute;inset:0;z-index:300;background:rgba(0,0,0,.7);display:flex;align-items:center;justify-content:center';
+    modal.innerHTML = `<div style="background:rgba(30,30,50,.95);padding:20px 30px;border-radius:16px;text-align:center;border:1px solid rgba(255,255,255,.1)">
+      <p style="margin-bottom:14px;font-size:.9rem">${t('quitGame')}</p>
+      <div style="display:flex;gap:10px;justify-content:center">
+        <button class="btn btn-danger" onclick="document.getElementById('quit-modal').remove();confirmGoHome()">${t('quit')}</button>
+        <button class="btn btn-secondary" onclick="document.getElementById('quit-modal').remove();gameRunning=true;">${t('cancel')}</button>
+      </div>
+    </div>`;
+    document.getElementById('game-root').appendChild(modal);
+    return;
+  }
+  confirmGoHome();
+};
+window.confirmGoHome = function(){
+  gameRunning = false;
+  // Keep BGM playing on home screen
+  clearInterval(timerInterval);
+  document.getElementById('result-modal').classList.add('hidden');
+  document.getElementById('fail-modal').classList.add('hidden');
+  document.getElementById('how-modal').classList.add('hidden');
+  hideGameUI();
+  document.getElementById('countdown').classList.add('hidden');
+  document.getElementById('level-screen').classList.remove('hidden');
+  renderLevelSelect();
+};
+
+// ===== ACTIONS =====
+window.doJump = function(){ if(playerOnGround && gameRunning){playerVelocity.y=9;playerOnGround=false;playSfx('jump');} };
+
+// ===== THEME SWITCH (Level 1 only) =====
+let themeSwitchIdx = 0;
+window.switchTheme = function(){
+  if(currentLevel !== 0 || !gameRunning) return;
+  themeSwitchIdx = (themeSwitchIdx + 1) % THEME_ORDER.length;
+  const newSkin = THEME_ORDER[themeSwitchIdx];
+  // Update level skin temporarily
+  LEVELS[0].skin = newSkin;
+  // Rebuild maze visuals (keep same maze layout)
+  rebuildMazeVisuals(newSkin);
+  // Update level label
+  
+  document.getElementById('level-label').textContent = `${t('level')} 1 · ${t(newSkin)}`;
+};
+
+function rebuildMazeVisuals(skin){
+  // Save camera state
+  const camPos = camera.position.clone();
+  
+  // Only change: sky, fog, lighting, weather, wall/floor materials
+  // Do NOT rebuild maze geometry (player would get stuck in new walls)
+  
+  const colors = getSkinColors(skin);
+  scene.background = new THREE.Color(colors.sky);
+  scene.fog = new THREE.Fog(colors.fog, colors.fogNear, colors.fogFar);
+  
+  // Update wall materials (recolor existing walls)
+  const wallTex = new THREE.CanvasTexture(createWallTexture(skin));
+  wallTex.wrapS = wallTex.wrapT = THREE.RepeatWrapping;
+  wallTex.repeat.set(1, 1);
+  const newWallMat = new THREE.MeshStandardMaterial({map:wallTex, roughness:0.85, color:colors.wallColor});
+  
+  for(const w of walls){
+    w.material = newWallMat;
+  }
+  
+  // Update floor (find it by size - it's the large plane)
+  scene.traverse(obj=>{
+    if(obj.isMesh && obj.geometry && obj.geometry.type === 'PlaneGeometry'){
+      const floorTex = new THREE.CanvasTexture(createFloorTexture(skin));
+      floorTex.wrapS = floorTex.wrapT = THREE.RepeatWrapping;
+      const size = LEVELS[currentLevel].size;
+      floorTex.repeat.set(size*2, size*2);
+      obj.material = new THREE.MeshStandardMaterial({map:floorTex, roughness:0.85});
+    }
+  });
+  
+  // Remove and rebuild weather only
+  for(const c of cloudMeshes) scene.remove(c);
+  cloudMeshes = [];
+  if(rainParticles){scene.remove(rainParticles);rainParticles=null;}
+  if(lightningLight){scene.remove(lightningLight);lightningLight=null;}
+  
+  // Remove old lights and re-add
+  const lightsToRemove = [];
+  scene.traverse(obj=>{ if(obj.isLight) lightsToRemove.push(obj); });
+  for(const l of lightsToRemove) scene.remove(l);
+  setupLighting();
+  
+  // Restore camera
+  camera.position.copy(camPos);
+}
+window.doPunch = function(){ if(gameRunning) triggerAttack(); };
+
+// ===== GAME LOOP =====
+function gameLoop(){
+  requestAnimationFrame(gameLoop);
+  const dt = Math.min(clock.getDelta(), .05);
+  
+  // Always update mixer (for result scene animations)
+  if(mixer) mixer.update(dt);
+  
+  if(gameRunning){
+    updatePlayer(dt);
+    // Check goal FIRST before monsters can attack
+    if(checkGoal()){ winGame(); }
+    else {
+      updateMonsters(dt);
+      updateCoins(dt);
+      animateChar(dt);
+    }
+    updateCamera();
+    updateWeather(dt);
+    // Player follow spotlight
+    if(window._playerSpot && charGroup){
+      window._playerSpot.position.set(charGroup.position.x, 10, charGroup.position.z);
+      window._playerSpot.target.position.set(charGroup.position.x, 0, charGroup.position.z);
+    }
+    if(goalMesh){goalMesh.rotation.y+=dt*2;goalRing.rotation.z+=dt;}
+    // Torch flicker
+    for(const t of torchLights){
+      t.intensity = 1.5 + Math.random()*1;
+    }
+    drawMinimap(false);
+  }
+  renderer.render(scene, camera);
+}
+
+// ===== JOYSTICK =====
+(function(){
+  const base = document.getElementById('joystick-base');
+  const knob = document.getElementById('joystick-knob');
+  let active = false, rect, touchId = null;
+  const MAX = 35;
+
+  function start(e){
+    e.preventDefault();
+    const t = e.changedTouches ? e.changedTouches[0] : e;
+    touchId = t.identifier || 0;
+    active = true;
+    rect = base.getBoundingClientRect();
+  }
+  function move(e){
+    if(!active) return;
+    let t;
+    if(e.touches){
+      for(let i=0;i<e.touches.length;i++){if(e.touches[i].identifier===touchId){t=e.touches[i];break;}}
+      if(!t) return;
+    } else t=e;
+    e.preventDefault();
+    const cx = rect.left+rect.width/2, cy = rect.top+rect.height/2;
+    const tp = transformTouch(t.clientX, t.clientY);
+    const cp = transformTouch(cx, cy);
+    let dx = tp.x-cp.x, dy = tp.y-cp.y;
+    const d = Math.sqrt(dx*dx+dy*dy);
+    if(d>MAX){dx=dx/d*MAX;dy=dy/d*MAX;}
+    knob.style.transform = `translate(calc(-50% + ${dx}px),calc(-50% + ${dy}px))`;
+    moveDir.x = dx/MAX;
+    moveDir.z = dy/MAX;
+  }
+  function end(e){
+    if(e.changedTouches){
+      let found=false;
+      for(let i=0;i<e.changedTouches.length;i++){if(e.changedTouches[i].identifier===touchId)found=true;}
+      if(!found)return;
+    }
+    active=false;touchId=null;
+    knob.style.transform='translate(-50%,-50%)';
+    moveDir.x=0;moveDir.z=0;
+  }
+
+  base.addEventListener('touchstart',start,{passive:false});
+  base.addEventListener('mousedown',start);
+  document.addEventListener('touchmove',move,{passive:false});
+  document.addEventListener('mousemove',move);
+  document.addEventListener('touchend',end);
+  document.addEventListener('mouseup',end);
+})();
+
+// ===== CAMERA SWIPE =====
+(function(){
+  let active=false, lx=0, ly=0, touchId=null;
+
+  document.addEventListener('touchstart',(e)=>{
+    if(active) return;
+    for(let i=0;i<e.changedTouches.length;i++){
+      const t=e.changedTouches[i];
+      const el=document.elementFromPoint(t.clientX,t.clientY);
+      if(el&&(el.closest('#joystick-zone')||el.closest('#action-btns')||el.closest('.btn')||el.closest('.modal-content')||el.closest('.screen:not(.hidden)')))continue;
+      active=true;touchId=t.identifier;
+      const tp=transformTouch(t.clientX,t.clientY);
+      lx=tp.x;ly=tp.y;
+      break;
+    }
+  },{passive:true});
+
+  document.addEventListener('touchmove',(e)=>{
+    if(!active)return;
+    for(let i=0;i<e.touches.length;i++){
+      if(e.touches[i].identifier===touchId){
+        const t=e.touches[i];
+        const tp=transformTouch(t.clientX,t.clientY);
+        const dx=tp.x-lx, dy=tp.y-ly;
+        camYaw+=dx*0.01;
+        camPitch=Math.max(0.05,Math.min(0.8,camPitch+dy*0.006));
+        lx=tp.x;ly=tp.y;
+        break;
+      }
+    }
+  },{passive:true});
+
+  document.addEventListener('touchend',(e)=>{
+    for(let i=0;i<e.changedTouches.length;i++){
+      if(e.changedTouches[i].identifier===touchId){active=false;touchId=null;break;}
+    }
+  },{passive:true});
+
+  // Mouse fallback
+  let mouseActive=false;
+  document.addEventListener('mousedown',(e)=>{
+    const el=document.elementFromPoint(e.clientX,e.clientY);
+    if(el&&(el.closest('#joystick-zone')||el.closest('#action-btns')||el.closest('.btn')||el.closest('.level-node')||el.closest('.modal-content')||el.closest('.hud-btn')||el.closest('#level-path')||el.closest('#level-screen')||el.closest('.how-container')))return;
+    mouseActive=true;lx=e.clientX;ly=e.clientY;
+  });
+  document.addEventListener('mousemove',(e)=>{
+    if(!mouseActive||!e.buttons)return;
+    camYaw+=(e.clientX-lx)*0.006;
+    camPitch=Math.max(0.05,Math.min(0.8,camPitch+(e.clientY-ly)*0.004));
+    lx=e.clientX;ly=e.clientY;
+  });
+  document.addEventListener('mouseup',()=>{mouseActive=false;});
+})();
+
+// ===== ACTION BUTTONS =====
+(function(){
+  const bj=document.getElementById('btn-jump');
+  const bp=document.getElementById('btn-punch');
+  const br=document.getElementById('btn-run');
+  bj.addEventListener('touchstart',(e)=>{e.preventDefault();doJump();},{passive:false});
+  bj.addEventListener('mousedown',()=>doJump());
+  bp.addEventListener('touchstart',(e)=>{e.preventDefault();doPunch();},{passive:false});
+  bp.addEventListener('mousedown',()=>doPunch());
+  let runTimeout = null;
+  function triggerRun(){
+    if(runTimeout) clearTimeout(runTimeout);
+    isRunning = true; br.classList.add('run-active');
+    playSfx('run');
+    // Always exactly 2s sprint, whether tap or hold
+    runTimeout = setTimeout(()=>{isRunning=false;br.classList.remove('run-active');runTimeout=null;}, 2000);
+  }
+  br.addEventListener('touchstart',(e)=>{e.preventDefault();triggerRun();},{passive:false});
+  br.addEventListener('touchend',()=>{});
+  br.addEventListener('mousedown',()=>triggerRun());
+  br.addEventListener('mouseup',()=>{});
+})();
+
+// ===== KEYBOARD =====
+const keys={};
+document.addEventListener('keydown',(e)=>{keys[e.code]=true;});
+document.addEventListener('keyup',(e)=>{keys[e.code]=false;});
+(function poll(){
+  requestAnimationFrame(poll);
+  if(!gameRunning)return;
+  let kx=0,kz=0;
+  if(keys.KeyW||keys.ArrowUp)kz=-1;
+  if(keys.KeyS||keys.ArrowDown)kz=1;
+  if(keys.KeyA||keys.ArrowLeft)kx=-1;
+  if(keys.KeyD||keys.ArrowRight)kx=1;
+  if(kx||kz){moveDir.x=kx;moveDir.z=kz;}
+  else if(!keys.KeyW&&!keys.KeyS&&!keys.KeyA&&!keys.KeyD&&!keys.ArrowUp&&!keys.ArrowDown&&!keys.ArrowLeft&&!keys.ArrowRight){
+    // Only reset if no touch joystick active
+  }
+  isRunning = !!keys.ShiftLeft || isRunning;
+  if(keys.Space){doJump();keys.Space=false;}
+  if(keys.KeyF){doPunch();keys.KeyF=false;}
+})();
+
+// ===== RESIZE =====
+window.addEventListener('resize',()=>{
+  const w=getW(),h=getH();
+  camera.aspect=w/h;camera.updateProjectionMatrix();
+  renderer.setSize(w,h);
+});
+
+// ===== BOOT =====
+initScene();
+renderLevelSelect();
+updateAllText();
+gameLoop();
+
+// Start BGM on first user interaction (autoplay policy)
+document.addEventListener('touchstart', function initBGM(){
+  startBGM();
+  document.removeEventListener('touchstart', initBGM);
+}, {once:true});
+document.addEventListener('click', function initBGM(){
+  startBGM();
+  document.removeEventListener('click', initBGM);
+}, {once:true});
+
+// First-time how-to-play popup (only once)
+if(!localStorage.getItem('maze3d_how_shown')){
+  setTimeout(()=>{
+    showHowModal();
+    localStorage.setItem('maze3d_how_shown','1');
+  }, 500);
+}
+
+</script>
+<canvas id="game-canvas"></canvas>
+</div>
+</body>
+</html>
